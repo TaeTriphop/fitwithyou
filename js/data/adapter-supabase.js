@@ -1,6 +1,3 @@
-// เก็บข้อมูลบน Supabase: คุณกับแฟนเห็นข้อมูลชุดเดียวกันทุกเครื่อง
-// ไม่มีการเข้าสู่ระบบ แต่ทุกคำขอจะแนบรหัสลับ (x-app-pin) ไปด้วย
-// Supabase ตรวจรหัสนี้เองผ่าน RLS (ดู supabase-setup.sql) รหัสจึงไม่ได้อยู่ในโค้ดนี้
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 
 const PAGE = 1000;
@@ -44,7 +41,6 @@ export function createSupabaseAdapter({ url, anonKey, pin }) {
       check(await sb.from(t).delete().in('id', ids));
     },
 
-    // ใช้ตอนนำเข้าไฟล์สำรอง/ล้างข้อมูล: ลบจากล่างขึ้นบน แล้วใส่ใหม่จากบนลงล่าง
     async replaceAll(tables) {
       const order = Object.keys(tables);
       for (const t of [...order].reverse()) check(await sb.from(t).delete().neq('id', ''));
