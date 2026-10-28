@@ -35,10 +35,32 @@ export function dot(p) {
   return `<span class="dot" style="--pc:${esc(p.color)}" aria-hidden="true"></span>`;
 }
 
-export function avatar(p) {
-  const first = Array.from(p.name || '?')[0];
-  return `<span class="avatar" style="--pc:${esc(p.color)}" title="${esc(p.name)}">${esc(first)}</span>`;
+// รูปจากลิงก์: ถ้าโหลดไม่ขึ้น รูปจะหายไปเอง เหลือตัวอักษร/ข้อความเหมือนเดิม
+function img(url, onerror) {
+  return `<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="${onerror}">`;
 }
+
+export function avatar(p, cls = '') {
+  const first = Array.from(p.name || '?')[0];
+  return `<span class="avatar ${cls}" style="--pc:${esc(p.color)}" title="${esc(p.name)}">${esc(first)}${p.avatar_url ? img(p.avatar_url, 'this.remove()') : ''}</span>`;
+}
+
+export function thumb(ex, cls = '') {
+  return ex?.image_url ? `<span class="thumb ${cls}">${img(ex.image_url, 'this.parentNode.remove()')}</span>` : '';
+}
+
+// ตรวจลิงก์รูป: คืนข้อความเตือน หรือ null ถ้าใช้ได้
+export function imageUrlProblem(url) {
+  const u = (url || '').trim();
+  if (!u) return null;
+  if (!/^https?:\/\//i.test(u)) return 'ลิงก์รูปต้องขึ้นต้นด้วย https://';
+  if (/pin\.it\/|pinterest\.[a-z.]+\/pin\//i.test(u)) {
+    return 'ลิงก์นี้เป็นหน้าเว็บ Pinterest ไม่ใช่ตัวรูป ให้กดค้างที่รูปแล้วเลือก "คัดลอกที่อยู่รูปภาพ"';
+  }
+  return null;
+}
+
+export const IMAGE_HINT = 'ใช้ลิงก์ของตัวรูปโดยตรง เช่นจาก Pinterest ให้กดค้างที่รูปแล้วเลือก "คัดลอกที่อยู่รูปภาพ" (มักขึ้นต้นด้วย i.pinimg.com)';
 
 let toastTimer;
 export function toast(msg) {

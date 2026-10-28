@@ -5,6 +5,7 @@ create table profiles (
   id text primary key,
   name text not null,
   color text not null,
+  avatar_url text default '',
   sort int not null default 0,
   created_at timestamptz not null default now()
 );
@@ -18,6 +19,7 @@ create table exercises (
   kind text not null default 'weight' check (kind in ('weight', 'reps', 'time')),
   unit text,
   video_url text default '',
+  image_url text default '',
   is_custom boolean not null default false,
   created_at timestamptz not null default now()
 );
@@ -62,6 +64,7 @@ create table sessions (
   id text primary key,
   date date not null unique,
   extra_items jsonb not null default '[]',
+  substitutions jsonb not null default '[]',
   finished_at timestamptz,
   created_at timestamptz not null default now()
 );

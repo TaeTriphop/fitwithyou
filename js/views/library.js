@@ -1,7 +1,7 @@
 // แท็บ "คลังท่า": ค้นหา กรองหมวด ใส่ลงวันในแผน และเพิ่ม/แก้ท่าเอง
 import { store, uid } from '../data/store.js';
 import { rerender } from '../core.js';
-import { esc, icon, sheet, toast } from '../ui.js';
+import { esc, icon, dot, thumb, sheet, toast, imageUrlProblem, IMAGE_HINT } from '../ui.js';
 import * as D from '../domain.js';
 
 const KINDS = [
@@ -25,7 +25,8 @@ function results() {
     .map((e) => {
       const days = [...new Set(items.filter((i) => i.exercise_id === e.id).map((i) => i.weekday))].sort();
       const inTarget = st.day != null && days.includes(st.day);
-      return `<button type="button" class="lib-row ${inTarget ? 'is-in' : ''}" data-act="open" data-id="${e.id}" aria-label="${esc(e.name)} ใส่ลงตาราง">
+      return `<button type="button" class="lib-row ${inTarget ? 'is-in' : ''}" data-act="open" data-id="${e.id}">
+        ${thumb(e, 'sm')}
         <span class="stack-0 grow">
           <strong>${esc(e.name)}</strong>
           <span class="muted">${esc(e.muscles)} · ${esc(e.equipment)}</span>
@@ -84,22 +85,47 @@ function assignSheet() {
   const whoOpts = [['all', 'ทั้งคู่'], ...people.map((p) => [p.id, p.name])]
     .map(([k, label]) => `<button type="button" class="${s.who === k ? 'on' : ''}" data-act="who" data-k="${k}" aria-pressed="${s.who === k}">${esc(label)}</button>`)
     .join('');
-  const video = ex.video_url
-    ? `<a class="btn-sm" href="${esc(ex.video_url)}" target="_blank" rel="noopener">${icon('play', 14)}ดูคลิป</a>`
-    : '';
-  const yt = `<a class="btn-sm" href="https://www.youtube.com/results?search_query=${encodeURIComponent(ex.name + ' exercise')}" target="_blank" rel="noopener">${icon('search', 14)}ค้นคลิปใน YouTube</a>`;
+
+  const history = people
+    .map((p) => {
+      const h = D.history(ex.id, p.id).slice(-3).reverse();
+      if (!h.length) return '';
+      return h
+        .map(
+          (e) => `<div class="person-row">${dot(p)}<span class="who">${esc(p.name)}</span><span class="grow">${esc(D.resultText(ex, e))}</span>
+            <span class="${e.ev.complete ? 'st-ok' : 'st-warn'}">${e.ev.complete ? 'ครบ' : `${e.ev.total}/${e.ev.goal}`}</span>
+            <span class="muted nowrap">${D.fmtShortDate(e.date)}</span></div>`,
+        )
+        .join('');
+    })
+    .join('');
+
+  const subs = D.substitutesFor(ex, new Set(), 5)
+    .map(
+      (e) => `<button type="button" class="sub-row as-btn" data-act="open" data-id="${e.id}">${thumb(e, 'sm')}
+        <span class="stack-0 grow"><strong>${esc(e.name)}</strong><span class="muted">${esc(e.muscles)} · ${esc(e.equipment)}</span></span>${icon('next', 18)}</button>`,
+    )
+    .join('');
+
   const n = s.days.length;
   const inPlan = store.all('plan_items').some((i) => i.exercise_id === ex.id);
   return sheet({
     title: ex.name,
     sub: `${ex.muscles} · ${ex.equipment}`,
     body: `
-      <div class="row wrap">${video}${yt}<button type="button" class="btn-sm" data-act="openEdit" data-id="${ex.id}">${icon('edit', 14)}แก้ไขท่า</button></div>
+      ${ex.image_url ? `<div class="hero">${thumb(ex, 'lg')}</div>` : ''}
+      <div class="row wrap">
+        ${ex.video_url
+          ? `<a class="btn-sm" href="${esc(ex.video_url)}" target="_blank" rel="noopener">${icon('play', 14)}ดูคลิปตัวอย่าง</a>`
+          : `<button type="button" class="btn-sm" data-act="openEdit" data-id="${ex.id}">${icon('plus', 14)}เพิ่มคลิปตัวอย่าง</button>`}
+        <button type="button" class="btn-sm" data-act="openEdit" data-id="${ex.id}">${icon('edit', 14)}แก้ไขท่า</button>
+      </div>
       <div class="field"><span class="label">เล่นวันไหนบ้าง (เลือกได้หลายวัน)</span><div class="daypicks">${dayBtns}</div></div>
       <div class="field"><span class="label">ใครเล่น</span><div class="seg seg-btns">${whoOpts}</div></div>
-      <p class="muted">น้ำหนักและจำนวนเซ็ทของแต่ละคน ตั้งได้ที่แผนของเรา หรือปรับตอนเล่นเลยก็ได้</p>`,
-    footer: `<button type="button" class="btn-ghost" data-act="closeSheet">ยกเลิก</button>
-      <button type="button" class="btn grow" data-act="saveAssign" ${!n && !inPlan ? 'disabled' : ''}>${n ? `บันทึก ${n} วัน` : inPlan ? 'เอาออกจากแผน' : 'เลือกวันก่อน'}</button>`,
+      <section class="stack-8"><h3 class="label">เล่นครั้งล่าสุด</h3>${history || '<p class="muted">ยังไม่เคยบันทึกท่านี้</p>'}</section>
+      <section class="stack-8"><h3 class="label">ท่าทดแทน</h3>${subs || '<p class="muted">ยังไม่มีท่าที่คล้ายกันในคลัง</p>'}</section>`,
+    footer: `<button type="button" class="btn-ghost" data-act="closeSheet">ปิด</button>
+      <button type="button" class="btn grow" data-act="saveAssign" ${!n && !inPlan ? 'disabled' : ''}>${n ? `บันทึกลงแผน ${n} วัน` : inPlan ? 'เอาออกจากแผน' : 'เลือกวันก่อน'}</button>`,
   });
 }
 
@@ -129,7 +155,10 @@ function formSheet() {
       ${input('equipment', 'อุปกรณ์', 'เช่น เครื่อง, ดัมเบล, เคเบิล')}
       <div class="field"><span class="label">บันทึกแบบไหน</span><div class="seg seg-btns">${kindBtns}</div></div>
       ${f.kind === 'time' ? `<div class="field"><span class="label">หน่วยเวลา</span><div class="seg seg-btns">${unitBtns}</div></div>` : ''}
-      ${input('video_url', 'ลิงก์คลิปท่า (ไม่ใส่ก็ได้)', 'https://youtube.com/...', 'url')}
+      ${input('video_url', 'คลิปตัวอย่าง (ไม่ใส่ก็ได้)', 'ลิงก์จาก YouTube, Instagram หรือ TikTok', 'url')}
+      ${input('image_url', 'รูป (ไม่ใส่ก็ได้)', 'https://i.pinimg.com/...', 'url')}
+      <p class="muted">${IMAGE_HINT}</p>
+      <div id="img-preview" class="hero">${f.image_url ? thumb({ image_url: f.image_url }, 'lg') : ''}</div>
       ${canDelete ? `<button type="button" class="btn-danger" data-act="deleteEx">${icon('trash', 18)}ลบท่านี้</button>` : ''}
       ${isEdit && hasLogs && ex?.is_custom ? '<p class="muted">ท่านี้มีประวัติการเล่นแล้ว จึงลบไม่ได้ แต่แก้ไขได้</p>' : ''}`,
     footer: `<button type="button" class="btn-ghost" data-act="closeSheet">ยกเลิก</button>
@@ -148,7 +177,13 @@ export const inputs = {
     refreshResults();
   },
   form(value, d) {
-    if (st.sheet?.type === 'form') st.sheet.form[d.f] = value;
+    if (st.sheet?.type !== 'form') return;
+    st.sheet.form[d.f] = value;
+    if (d.f === 'image_url') {
+      const el = document.getElementById('img-preview');
+      const ok = value.trim() && !imageUrlProblem(value);
+      if (el) el.innerHTML = ok ? thumb({ image_url: value.trim() }, 'lg') : '';
+    }
   },
 };
 
@@ -196,7 +231,7 @@ export const actions = {
   openCreate() {
     st.sheet = {
       type: 'form',
-      form: { id: null, name: st.q.trim(), muscles: '', equipment: '', categories: st.cat !== 'ทั้งหมด' ? [st.cat] : [], kind: 'weight', unit: 'วิ', video_url: '' },
+      form: { id: null, name: st.q.trim(), muscles: '', equipment: '', categories: st.cat !== 'ทั้งหมด' ? [st.cat] : [], kind: 'weight', unit: 'วิ', video_url: '', image_url: '' },
     };
     rerender();
   },
@@ -204,7 +239,7 @@ export const actions = {
     const e = D.exerciseById(d.id);
     st.sheet = {
       type: 'form',
-      form: { id: e.id, name: e.name, muscles: e.muscles || '', equipment: e.equipment || '', categories: [...e.categories], kind: e.kind, unit: e.unit || 'วิ', video_url: e.video_url || '' },
+      form: { id: e.id, name: e.name, muscles: e.muscles || '', equipment: e.equipment || '', categories: [...e.categories], kind: e.kind, unit: e.unit || 'วิ', video_url: e.video_url || '', image_url: e.image_url || '' },
     };
     rerender();
   },
@@ -230,6 +265,8 @@ export const actions = {
     if (dup) return toast('มีท่าชื่อนี้อยู่แล้ว');
     const url = f.video_url.trim();
     if (url && !/^https?:\/\//i.test(url)) return toast('ลิงก์คลิปต้องขึ้นต้นด้วย https://');
+    const imgProblem = imageUrlProblem(f.image_url);
+    if (imgProblem) return toast(imgProblem);
     const row = {
       name,
       muscles: f.muscles.trim() || f.categories.join(' · '),
@@ -238,6 +275,7 @@ export const actions = {
       kind: f.kind,
       unit: f.kind === 'time' ? f.unit : null,
       video_url: url,
+      image_url: f.image_url.trim(),
     };
     if (f.id) {
       await store.update('exercises', f.id, row);

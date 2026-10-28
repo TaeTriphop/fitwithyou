@@ -6,7 +6,6 @@ import * as weekView from './views/week.js';
 import * as planView from './views/plan.js';
 import * as workoutView from './views/workout.js';
 import * as libraryView from './views/library.js';
-import * as progressView from './views/progress.js';
 import * as settingsView from './views/settings.js';
 
 // [รูปแบบ hash, หน้าจอ, แท็บที่ไฮไลต์ (null = ซ่อนแถบล่าง), ตัวแปลงพารามิเตอร์]
@@ -15,7 +14,6 @@ const ROUTES = [
   [/^#\/plan$/, planView, 'week', () => ({})],
   [/^#\/workout\/(\d{4}-\d{2}-\d{2})$/, workoutView, null, (m) => ({ date: m[1] })],
   [/^#\/library(?:\/day\/(\d))?$/, libraryView, 'library', (m) => ({ day: m[1] != null ? +m[1] : null })],
-  [/^#\/progress(?:\/ex\/([\w-]+))?$/, progressView, 'progress', (m) => ({ ex: m[1] || null })],
   [/^#\/settings$/, settingsView, 'settings', () => ({})],
 ];
 
@@ -34,7 +32,13 @@ function resolve() {
 
 function render() {
   if (!current) return;
+  // จำตำแหน่งเลื่อนในแผ่นเด้งไว้ ไม่ให้เด้งกลับขึ้นบนทุกครั้งที่กดบันทึก
+  const prevSheet = viewEl.querySelector('.sheet-body');
+  const prevKey = viewEl.querySelector('.sheet')?.getAttribute('aria-label');
+  const sheetScroll = prevSheet ? prevSheet.scrollTop : 0;
   viewEl.innerHTML = current.view.render(current.params);
+  const nextSheet = viewEl.querySelector('.sheet-body');
+  if (nextSheet && prevSheet && viewEl.querySelector('.sheet')?.getAttribute('aria-label') === prevKey) nextSheet.scrollTop = sheetScroll;
   tabbar.hidden = !current.tab;
   document.body.classList.toggle('no-tabbar', !current.tab);
   tabbar.querySelectorAll('a').forEach((a) => {

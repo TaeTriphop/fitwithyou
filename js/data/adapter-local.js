@@ -1,5 +1,6 @@
 // เก็บข้อมูลใน localStorage ของเบราว์เซอร์ (เครื่องใครเครื่องมัน)
 // ทุก adapter ต้องมีเมธอดชุดเดียวกัน: select, insert, update, remove, replaceAll
+// ชื่อ key นี้ตั้งไว้ตั้งแต่เวอร์ชันแรก ห้ามเปลี่ยน ไม่อย่างนั้นข้อมูลเดิมจะหาย
 const KEY = 'fitduo:v1';
 
 export function createLocalAdapter() {

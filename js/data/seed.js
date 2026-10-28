@@ -92,8 +92,8 @@ export function buildSeed() {
   const row = (r) => ({ id: uid(), created_at: now, ...r });
 
   const profiles = [
-    { id: ME, name: 'ฉัน', color: '#2251CC', sort: 0, created_at: now },
-    { id: FAN, name: 'แฟน', color: '#C2580F', sort: 1, created_at: now },
+    { id: ME, name: 'ฉัน', color: '#2251CC', avatar_url: '', sort: 0, created_at: now },
+    { id: FAN, name: 'แฟน', color: '#C2580F', avatar_url: '', sort: 1, created_at: now },
   ];
 
   const exercises = EXERCISES.map(([id, name, muscles, equipment, categories, kind = 'weight', unit = null]) => ({
@@ -105,6 +105,7 @@ export function buildSeed() {
     kind,
     unit,
     video_url: '',
+    image_url: '',
     is_custom: false,
     created_at: now,
   }));

@@ -1,7 +1,7 @@
 // แท็บ "ตั้งค่า": ชื่อ, สำรอง/นำเข้าข้อมูล, ล้างข้อมูล
 import { store } from '../data/store.js';
 import { buildSeed } from '../data/seed.js';
-import { esc, icon, avatar, toast } from '../ui.js';
+import { esc, icon, avatar, toast, imageUrlProblem, IMAGE_HINT } from '../ui.js';
 import * as D from '../domain.js';
 
 export function render() {
@@ -16,16 +16,21 @@ export function render() {
     <header class="page-head"><h1>ตั้งค่า</h1></header>
 
     <section class="card">
-      <h3 class="label">ชื่อที่แสดง</h3>
+      <h3 class="label">คุณกับแฟน</h3>
       ${people
         .map(
-          (p) => `<label class="field row">
-            ${avatar(p)}
-            <span class="sr-only">ชื่อคนที่ ${p.sort + 1}</span>
-            <input class="input grow" data-change="name" data-id="${p.id}" value="${esc(p.name)}" maxlength="20">
-          </label>`,
+          (p) => `<div class="profile-block">
+            ${avatar(p, 'lg')}
+            <div class="stack-8 grow">
+              <label class="field"><span class="label">ชื่อ</span>
+                <input class="input" data-change="name" data-id="${p.id}" value="${esc(p.name)}" maxlength="20"></label>
+              <label class="field"><span class="label">รูปโปรไฟล์ (ลิงก์รูป ไม่ใส่ก็ได้)</span>
+                <input class="input" type="url" inputmode="url" data-change="avatar" data-id="${p.id}" value="${esc(p.avatar_url || '')}" placeholder="https://i.pinimg.com/..."></label>
+            </div>
+          </div>`,
         )
         .join('')}
+      <p class="muted">${IMAGE_HINT} ถ้าไม่ใส่รูป หรือรูปโหลดไม่ขึ้น จะแสดงตัวอักษรแรกของชื่อแทน</p>
     </section>
 
     <section class="card">
@@ -57,6 +62,15 @@ export const changes = {
     await store.update('profiles', d.id, { name });
     toast('บันทึกชื่อแล้ว');
   },
+  async avatar(value, d) {
+    const problem = imageUrlProblem(value);
+    if (problem) {
+      toast(problem);
+      return;
+    }
+    await store.update('profiles', d.id, { avatar_url: value.trim() });
+    toast(value.trim() ? 'บันทึกรูปแล้ว' : 'เอารูปออกแล้ว');
+  },
   async import(_, d, el) {
     const file = el.files?.[0];
     el.value = '';
@@ -79,7 +93,7 @@ export const actions = {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `fitduo-backup-${D.todayISO()}.json`;
+    a.download = `fitwithyou-backup-${D.todayISO()}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();

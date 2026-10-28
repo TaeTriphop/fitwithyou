@@ -125,10 +125,15 @@ export const sessionOf = (date) => store.all('sessions').find((s) => s.date === 
 export function workoutItems(date) {
   const day = effectiveDay(date);
   const s = sessionOf(date);
+  const subs = s?.substitutions || [];
+  const planned = day.items.map((it) => {
+    const sub = subs.find((x) => x.from === it.exercise_id);
+    return sub ? { ...it, exercise_id: sub.to, replaces: it.exercise_id } : it;
+  });
   const extras = (s?.extra_items || []).map((x) => ({ ...x, extra: true }));
   const seen = new Set();
   const valid = new Set(store.all('profiles').map((p) => p.id));
-  return [...day.items, ...extras]
+  return [...planned, ...extras]
     .filter((it) => {
       if (seen.has(it.exercise_id) || !exerciseById(it.exercise_id)) return false;
       seen.add(it.exercise_id);
@@ -291,35 +296,6 @@ export function weekCoverage(ws) {
   return CATEGORIES.filter((c) => planned.has(c) || done.has(c)).map((c) => ({ label: c, done: done.has(c) }));
 }
 
-// วันที่ -> Set ของคนที่เล่นวันนั้น
-export function playedMap() {
-  const dates = new Map(store.all('sessions').map((s) => [s.id, s.date]));
-  const m = new Map();
-  for (const l of store.all('set_logs')) {
-    const d = dates.get(l.session_id);
-    if (!d) continue;
-    if (!m.has(d)) m.set(d, new Set());
-    m.get(d).add(l.profile_id);
-  }
-  return m;
-}
-
-// จำนวนสัปดาห์ติดต่อกันที่ไปยิมครบจำนวนวันตามแผน
-export function weekStreak() {
-  const plannedDays = [0, 1, 2, 3, 4, 5, 6].filter((wd) => planItemsOf(wd).length).length;
-  if (!plannedDays) return 0;
-  const played = playedMap();
-  const countWeek = (ws) => [0, 1, 2, 3, 4, 5, 6].filter((i) => played.has(addDays(ws, i))).length;
-  let ws = weekStartOf(todayISO());
-  let n = countWeek(ws) >= plannedDays ? 1 : 0;
-  ws = addDays(ws, -7);
-  while (countWeek(ws) >= plannedDays && n < 520) {
-    n++;
-    ws = addDays(ws, -7);
-  }
-  return n;
-}
-
 // ---------- ค้นหาท่า ----------
 export function searchExercises(q, cat) {
   const words = (q || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -336,4 +312,24 @@ export function searchExercises(q, cat) {
       return words.every((w) => hay.includes(w));
     })
     .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+}
+
+// ท่าทดแทน: หมวดเดียวกัน + กล้ามเนื้อที่โดนคล้ายกัน คะแนนสูงอยู่บน
+export function substitutesFor(ex, exclude = new Set(), limit = 6) {
+  const words = (m) => (m || '').split('·').map((w) => w.trim()).filter(Boolean);
+  const mine = new Set(words(ex.muscles));
+  return store
+    .all('exercises')
+    .filter((e) => e.id !== ex.id && !exclude.has(e.id))
+    .map((e) => {
+      let score = e.categories[0] === ex.categories[0] ? 2 : 0;
+      score += e.categories.filter((c) => ex.categories.includes(c)).length;
+      score += words(e.muscles).filter((w) => mine.has(w)).length * 2;
+      if (e.kind !== ex.kind && (e.kind === 'time' || ex.kind === 'time')) score -= 3;
+      return { e, score };
+    })
+    .filter((x) => x.score >= 3)
+    .sort((a, b) => b.score - a.score || a.e.name.localeCompare(b.e.name))
+    .slice(0, limit)
+    .map((x) => x.e);
 }

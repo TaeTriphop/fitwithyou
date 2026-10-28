@@ -1,8 +1,9 @@
 // แท็บ "สัปดาห์นี้": ดูตามวันที่จริง สถานะการเล่น และย้ายวันเฉพาะสัปดาห์
 import { store } from '../data/store.js';
 import { rerender } from '../core.js';
-import { esc, icon, dot, avatar, sheet, toast, scheduleTabs } from '../ui.js';
+import { esc, icon, avatar, sheet, toast, scheduleTabs } from '../ui.js';
 import * as D from '../domain.js';
+import { exerciseCard } from './shared.js';
 
 const st = { ws: null, sel: 0, sheet: false };
 
@@ -22,37 +23,6 @@ export function enter(p) {
 
 function dayTitle(d) {
   return d.title || D.autoTitle(d.items) || (d.items.length ? 'ไม่มีชื่อวัน' : 'วันพัก');
-}
-
-function exerciseCard(it, day, people) {
-  const ex = D.exerciseById(it.exercise_id);
-  const who = people.filter((p) => it.who.includes(p.id));
-  const rows = who
-    .map((p) => {
-      const r = day.logs.length ? D.resultFor(day.logs, ex.id, p.id, day.date) : null;
-      let status = '';
-      if (day.logs.length) {
-        status = !r
-          ? '<span class="st-muted">ไม่ได้เล่น</span>'
-          : r.ev.complete
-            ? '<span class="st-ok">ครบ</span>'
-            : `<span class="st-warn">ไม่ครบ ${r.ev.total}/${r.ev.goal}</span>`;
-      }
-      const text = r ? D.resultText(ex, r) : D.targetText(ex, D.targetOrDefault(p.id, ex.id));
-      return `<div class="person-row">${dot(p)}<span class="who">${esc(p.name)}</span><span class="grow">${esc(text)}</span>${status}</div>`;
-    })
-    .join('');
-  const tags = [
-    who.length && who.length < people.length ? `<span class="tag">เฉพาะ${esc(who[0].name)}</span>` : '',
-    it.extra ? '<span class="tag">เฉพาะวันนี้</span>' : '',
-  ].join('');
-  return `<article class="card">
-    <div class="row between top">
-      <div class="stack-0 grow"><h3>${esc(ex.name)}</h3><span class="muted">${esc(ex.muscles)}</span></div>
-      ${tags ? `<div class="row wrap end">${tags}</div>` : ''}
-    </div>
-    <div class="stack-6">${rows}</div>
-  </article>`;
 }
 
 export function render() {
@@ -106,7 +76,7 @@ export function render() {
       </div>
     </div>`;
   } else {
-    const label = sel.logs.length ? (sel.date === today ? 'เล่นต่อ' : 'ดูผลการเล่น') : 'เริ่มเล่น';
+    const label = sel.logs.length ? (sel.date === today ? 'บันทึกต่อ' : 'ดูและแก้ผลการเล่น') : 'เริ่มเล่น';
     const canMove = !sel.movedOut && D.planItemsOf(st.sel).length && !sel.logs.length;
     body = `${sel.items.map((it) => exerciseCard(it, sel, people)).join('')}
       <a class="btn" href="#/workout/${sel.date}">${label}</a>
