@@ -11,16 +11,32 @@ const cache = Object.fromEntries(TABLES.map((t) => [t, []]));
 const listeners = new Set();
 let onError = (e) => console.error(e);
 
+// รหัสลับจำไว้ในเครื่อง (ใส่ครั้งเดียว)
+const PIN_KEY = 'fitwithyou:pin';
+export const pinStore = {
+  get: () => localStorage.getItem(PIN_KEY) || '',
+  set: (pin) => localStorage.setItem(PIN_KEY, pin),
+  clear: () => localStorage.removeItem(PIN_KEY),
+};
+
 export function uid() {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
+function codeError(code, message) {
+  const e = new Error(message);
+  e.code = code;
+  return e;
+}
+
 async function getAdapter() {
   if (adapter) return adapter;
   if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    const pin = pinStore.get();
+    if (!pin) throw codeError('PIN_REQUIRED', 'ต้องใส่รหัสก่อน');
     const { createSupabaseAdapter } = await import('./adapter-supabase.js');
-    adapter = createSupabaseAdapter({ url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY });
+    adapter = createSupabaseAdapter({ url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, pin });
   } else {
     adapter = createLocalAdapter();
   }
@@ -58,24 +74,21 @@ export const store = {
     return !!(SUPABASE_URL && SUPABASE_ANON_KEY);
   },
 
+  lock() {
+    pinStore.clear();
+    adapter = null;
+  },
+
+  // เปิดข้อมูล: ถ้ารหัสผิด Supabase จะไม่ส่งข้อมูลคนกลับมาเลย (ตารางคนมี 2 แถวเสมอ)
   async init(buildSeed) {
+    adapter = null;
     await getAdapter();
-    await adapter.init?.();
     await loadAll();
     if (!cache.profiles.length) {
-      const seed = buildSeed();
-      await adapter.insert('profiles', seed.profiles);
+      if (adapter.name === 'supabase') throw codeError('PIN_INVALID', 'รหัสไม่ถูกต้อง');
+      await adapter.insert('profiles', buildSeed().profiles);
       await loadAll();
     }
-  },
-
-  async signIn(email, password) {
-    await getAdapter();
-    await adapter.signIn(email, password);
-  },
-
-  async signOut() {
-    await adapter?.signOut?.();
   },
 
   async reload() {

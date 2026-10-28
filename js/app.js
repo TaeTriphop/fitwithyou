@@ -1,4 +1,4 @@
-import { store } from './data/store.js';
+import { store, pinStore } from './data/store.js';
 import { buildSeed } from './data/seed.js';
 import { setRenderer } from './core.js';
 import { esc, toast } from './ui.js';
@@ -7,7 +7,7 @@ import * as workoutView from './views/workout.js';
 import * as overviewView from './views/overview.js';
 import * as libraryView from './views/library.js';
 import * as settingsView from './views/settings.js';
-import * as loginView from './views/login.js';
+import * as pinView from './views/pin.js';
 
 // [รูปแบบ hash, หน้าจอ, แท็บที่ไฮไลต์ (null = ซ่อนแถบล่าง), พารามิเตอร์]
 const ROUTES = [
@@ -96,7 +96,7 @@ document.addEventListener('change', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.querySelector('.sheet-layer')) current?.view.actions?.closeSheet?.({});
-  if (e.key === 'Enter' && current?.view === loginView && e.target.closest('.login')) run(loginView.actions.login);
+  if (current?.view === pinView) pinView.onKey(e);
 });
 
 // กลับมาเปิดแอพอีกครั้ง: ดึงข้อมูลล่าสุด (เผื่อแฟนบันทึกจากอีกเครื่อง)
@@ -111,26 +111,46 @@ store.setErrorHandler((e) => {
 });
 setRenderer(render);
 store.subscribe(render);
-loginView.setOnSuccess(boot);
-
-async function boot() {
+// ตรวจรหัส: ลองเปิดข้อมูลด้วยรหัสนี้ ถ้าเปิดได้แปลว่าถูก
+pinView.setVerifier(async (pin) => {
+  pinStore.set(pin);
   try {
     await store.init(buildSeed);
   } catch (e) {
-    if (e.code === 'AUTH_REQUIRED') {
-      current = { view: loginView, tab: null, params: {}, hash: '#login' };
-      render();
-      return;
+    if (e.code === 'PIN_INVALID') return false;
+    throw e;
+  }
+  setTimeout(start, 700);
+  return true;
+});
+
+function showPin() {
+  current = { view: pinView, tab: null, params: {}, hash: '#pin' };
+  render();
+}
+
+function start() {
+  if (!ready) window.addEventListener('hashchange', route);
+  ready = true;
+  current = null;
+  route();
+}
+
+async function boot() {
+  if (store.configured && !pinStore.get()) return showPin();
+  try {
+    await store.init(buildSeed);
+  } catch (e) {
+    if (e.code === 'PIN_INVALID' || e.code === 'PIN_REQUIRED') {
+      pinStore.clear();
+      return showPin();
     }
     console.error(e);
     tabbar.hidden = true;
     viewEl.innerHTML = `<div class="empty"><h2>เปิดข้อมูลไม่ได้</h2><p class="muted">${esc(e.message)}</p><button type="button" class="btn" onclick="location.reload()">ลองใหม่</button></div>`;
     return;
   }
-  if (!ready) window.addEventListener('hashchange', route);
-  ready = true;
-  current = null;
-  route();
+  start();
 }
 
 boot();

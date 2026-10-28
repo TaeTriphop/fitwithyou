@@ -102,13 +102,6 @@ function assignSheet() {
     })
     .join('');
 
-  const subs = D.substitutesFor(ex, new Set(), 5)
-    .map(
-      (e) => `<button type="button" class="sub-row as-btn" data-act="open" data-id="${e.id}">${thumb(e, 'sm')}
-        <span class="stack-0 grow"><strong>${esc(e.name)}</strong><span class="muted">${esc([e.muscles || e.categories.join(' · '), e.equipment].filter(Boolean).join(' · '))}</span></span>${icon('next', 18)}</button>`,
-    )
-    .join('');
-
   const n = s.days.length;
   const inPlan = store.all('plan_items').some((i) => i.exercise_id === ex.id);
   return sheet({
@@ -124,8 +117,7 @@ function assignSheet() {
       </div>
       <div class="field"><span class="label">เล่นวันไหนบ้าง (เลือกได้หลายวัน)</span><div class="daypicks">${dayBtns}</div></div>
       <div class="field"><span class="label">ใครเล่น</span><div class="seg seg-btns">${whoOpts}</div></div>
-      <section class="stack-8"><h3 class="label">เล่นครั้งล่าสุด</h3>${history || '<p class="muted">ยังไม่เคยบันทึกท่านี้</p>'}</section>
-      <section class="stack-8"><h3 class="label">ท่าทดแทน</h3>${subs || '<p class="muted">ยังไม่มีท่าที่คล้ายกันในคลัง</p>'}</section>`,
+      <section class="stack-8"><h3 class="label">เล่นครั้งล่าสุด</h3>${history || '<p class="muted">ยังไม่เคยบันทึกท่านี้</p>'}</section>`,
     footer: `<button type="button" class="btn-ghost" data-act="closeSheet">ปิด</button>
       <button type="button" class="btn grow" data-act="saveAssign" ${!n && !inPlan ? 'disabled' : ''}>${n ? `บันทึกลงแผน ${n} วัน` : inPlan ? 'เอาออกจากแผน' : 'เลือกวันก่อน'}</button>`,
   });

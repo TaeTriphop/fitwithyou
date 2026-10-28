@@ -11,31 +11,21 @@ export function enter(p) {
   st.sheet = null;
 }
 
-function played(date) {
-  const s = D.sessionOf(date);
-  return !!s && D.resultsOfSession(s.id).length > 0;
-}
-
 export function render() {
-  const today = D.todayISO();
-  const ws = D.weekStartOf(today);
+  const todayWd = D.weekdayOf(D.todayISO());
   const people = D.profiles();
 
   const strip = D.DAY_SHORT.map((short, i) => {
-    const date = D.addDays(ws, i);
     const n = D.planItemsOf(i).length;
-    const isPlayed = played(date);
-    const sub = isPlayed ? 'เล่นแล้ว' : n ? `${n} ท่า` : 'พัก';
-    const cls = ['day', i === st.sel && 'is-sel', date === today && 'is-today', !n && 'is-rest'].filter(Boolean).join(' ');
-    return `<button type="button" class="${cls}" data-act="pick" data-i="${i}" aria-pressed="${i === st.sel}" aria-label="${D.DAY_FULL[i]} ${esc(sub)}">
-      <span class="day-name">${short}</span>
-      <span class="day-num">${D.parseISO(date).getDate()}</span>
-      <span class="day-sub ${isPlayed ? 'st-ok' : ''}">${sub}</span>
+    const cls = ['day', i === st.sel && 'is-sel', i === todayWd && 'is-today', !n && 'is-rest'].filter(Boolean).join(' ');
+    return `<button type="button" class="${cls}" data-act="pick" data-i="${i}" aria-pressed="${i === st.sel}" aria-label="วัน${D.DAY_FULL[i]} ${n ? `${n} ท่า` : 'พัก'}${i === todayWd ? ' วันนี้' : ''}">
+      <span class="day-num">${short}</span>
+      <span class="day-sub">${n ? `${n} ท่า` : 'พัก'}</span>
+      ${i === todayWd ? '<span class="day-today">วันนี้</span>' : ''}
     </button>`;
   }).join('');
 
-  const date = D.addDays(ws, st.sel);
-  const isToday = date === today;
+  const isToday = st.sel === todayWd;
   const items = D.planItemsOf(st.sel);
   const rows = items
     .map((it) => {
@@ -51,26 +41,22 @@ export function render() {
     })
     .join('');
 
+  const today = D.todayISO();
   const todaySession = D.sessionOf(today);
   const todayStarted = todaySession && D.resultsOfSession(todaySession.id).length > 0;
   let cta = '';
-  if (isToday) {
-    cta = `<a class="btn" href="#/workout/${today}">${todayStarted ? 'บันทึกต่อ' : 'เริ่มเล่นวันนี้'}</a>`;
-  } else {
-    if (played(date)) cta += `<a class="btn-ghost" href="#/workout/${date}">ดูผลวัน${D.DAY_FULL[st.sel]}</a>`;
-    if (items.length && !todayStarted) cta += `<a class="btn-ghost" href="#/workout/${today}/plan/${st.sel}">เล่นแผนนี้วันนี้</a>`;
-  }
+  if (isToday) cta = `<a class="btn" href="#/workout/${today}">${todayStarted ? 'บันทึกต่อ' : 'เริ่มเล่นวันนี้'}</a>`;
+  else if (items.length && !todayStarted) cta = `<a class="btn-ghost" href="#/workout/${today}/plan/${st.sel}">วันนี้เล่นแผนวัน${D.DAY_FULL[st.sel]}แทน</a>`;
 
   return `
     <header class="page-head">
       <h1>ตาราง</h1>
       <div class="avatars">${people.map((p) => avatar(p)).join('')}</div>
     </header>
-    <p class="muted">แผนนี้ใช้ซ้ำทุกสัปดาห์ แตะวันเพื่อดูหรือแก้ท่า</p>
     <div class="days">${strip}</div>
     <div class="row between bottom">
       <div class="stack-0">
-        <span class="muted">${D.DAY_FULL[st.sel]} ${D.fmtShortDate(date)}${isToday ? ' · วันนี้' : ''}</span>
+        <span class="muted">วัน${D.DAY_FULL[st.sel]}${isToday ? ' · วันนี้' : ''}</span>
         <h2>${esc(D.dayTitle(st.sel) || 'วันพัก')}</h2>
       </div>
       ${items.length ? `<span class="muted nowrap">${items.length} ท่า</span>` : ''}
@@ -78,6 +64,7 @@ export function render() {
     ${rows || '<p class="muted">ยังไม่มีท่าในวันนี้</p>'}
     <a class="btn-dashed" href="#/library/day/${st.sel}">${icon('plus', 18)}เพิ่มท่าวัน${D.DAY_FULL[st.sel]}</a>
     ${cta}
+    <p class="muted center-text">แผนนี้ใช้ซ้ำทุกสัปดาห์</p>
     ${renderSheet()}
   `;
 }

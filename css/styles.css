@@ -540,3 +540,83 @@ a.card.is-btn { text-decoration: none; }
 .login { max-width: 360px; margin: 10vh auto 0; display: flex; flex-direction: column; gap: 14px; text-align: center; }
 .login img { margin: 0 auto; border-radius: 18px; }
 .login .field { text-align: left; }
+
+/* ---------- v3: ตารางไม่มีวันที่ ---------- */
+.day { height: 78px; gap: 2px; }
+.day .day-num { font-size: 19px; }
+.day-today {
+  font-size: 10px; font-weight: 700;
+  color: var(--accent-ink); background: var(--accent-soft);
+  border-radius: 999px; padding: 0 6px; line-height: 16px;
+}
+.day.is-sel .day-today { background: rgba(255, 255, 255, 0.22); color: inherit; }
+.center-text { text-align: center; }
+.small { font-size: 12px; }
+
+/* ---------- หน้าใส่รหัส ---------- */
+.pin {
+  min-height: calc(100vh - 60px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; text-align: center; padding: 12px 0 24px;
+}
+.pin h1 { font-size: 24px; }
+.pin-title { font-size: 17px; font-weight: 600; }
+.pin-logo { position: relative; width: 76px; height: 52px; margin-bottom: 4px; }
+.pin-logo span { position: absolute; top: 0; width: 52px; height: 52px; border-radius: 50%; }
+.pin-logo .c1 { left: 0; background: #2251CC; }
+.pin-logo .c2 { right: 0; background: #C2580F; opacity: 0.92; }
+.pin-hearts { display: flex; gap: 6px; margin: 8px 0 2px; }
+.pin-heart { fill: transparent; stroke: #E8618C; stroke-width: 1.8; transition: transform 0.15s; }
+.pin-heart.on { fill: #E8618C; transform: scale(1.08); }
+.pin.wrong .pin-hearts { animation: pin-shake 0.4s; }
+.pin.ok .pin-heart { fill: #E8618C; animation: pin-pop 0.5s calc(var(--i) * 40ms) both; }
+.pin-msg { min-height: 22px; font-size: 14px; }
+.pin-msg.warn { color: var(--warn); font-weight: 600; }
+.pin-msg.ok { color: #D4467A; font-weight: 700; }
+.pin-pad { display: grid; grid-template-columns: repeat(3, 76px); gap: 14px 22px; margin-top: 8px; }
+.pin-key {
+  width: 76px; height: 76px; border-radius: 50%;
+  border: 1px solid var(--line-2); background: var(--surface);
+  font-size: 28px; font-weight: 500;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pin-key:active { background: var(--surface-2); }
+.pin-key.ghost { border-color: transparent; background: transparent; }
+@keyframes pin-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+@keyframes pin-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.35); }
+  100% { transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pin.wrong .pin-hearts, .pin.ok .pin-heart { animation: none; }
+}
+
+/* ---------- ภาพรวม ---------- */
+.person-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.person-card { background: var(--surface); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.person-card .big { font-size: 34px; line-height: 1.15; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.big.ok { color: var(--ok); }
+.big.warn { color: var(--warn); }
+.stackbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-2); margin-top: 8px; }
+.stackbar .up { background: var(--ok); }
+.stackbar .same { background: var(--line-2); }
+.stackbar .down { background: var(--warn); }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.stat { background: var(--surface-2); border-radius: var(--r-sm); padding: 10px 12px; display: flex; flex-direction: column; }
+.stat strong { font-size: 24px; line-height: 1.2; }
+.pr-row { display: flex; align-items: center; gap: 10px; }
+.pr-star { color: #E0A100; font-size: 18px; }
+.cmp-row { display: flex; align-items: center; gap: 8px; font-size: 14px; flex-wrap: wrap; }
+.cmp-row .who { width: 34px; color: var(--muted); flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-row .grow { min-width: 120px; }
+.chart { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+.legend { font-size: 12px; color: var(--muted); gap: 12px; }
+.pt { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--muted); display: inline-block; }
+.pt.full { background: var(--muted); }

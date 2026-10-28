@@ -8,7 +8,7 @@ export function render() {
   const people = D.profiles();
   const days = store.all('sessions').filter((s) => D.resultsOfSession(s.id).length).length;
   const where = store.isRemote
-    ? 'เชื่อมกับ Supabase แล้ว คุณกับแฟนเห็นข้อมูลชุดเดียวกันทุกเครื่องที่เข้าสู่ระบบ'
+    ? 'เชื่อมกับ Supabase แล้ว คุณกับแฟนเห็นข้อมูลชุดเดียวกันทุกเครื่องที่ใส่รหัสแล้ว'
     : 'ยังไม่ได้เชื่อม Supabase ข้อมูลเก็บอยู่ในเบราว์เซอร์ของเครื่องนี้เท่านั้น (ตั้งค่าได้ใน js/config.js)';
 
   return `
@@ -40,7 +40,7 @@ export function render() {
       <label class="btn-ghost file-btn">${icon('upload', 18)}นำเข้าจากไฟล์สำรอง
         <input type="file" accept="application/json,.json" data-change="import" class="sr-only">
       </label>
-      ${store.isRemote ? `<button type="button" class="btn-ghost" data-act="signOut">ออกจากระบบในเครื่องนี้</button>` : ''}
+      ${store.isRemote ? `<button type="button" class="btn-ghost" data-act="lock">ล็อกแอพในเครื่องนี้ (ต้องใส่รหัสใหม่)</button>` : ''}
     </section>
 
     <section class="card">
@@ -97,9 +97,9 @@ export const actions = {
     await store.reset(buildSeed);
     toast('ล้างข้อมูลแล้ว');
   },
-  async signOut() {
-    if (!confirm('ออกจากระบบในเครื่องนี้? ข้อมูลยังอยู่ครบ เข้าสู่ระบบใหม่ได้ทุกเมื่อ')) return;
-    await store.signOut();
+  lock() {
+    if (!confirm('ล็อกแอพในเครื่องนี้? ข้อมูลยังอยู่ครบ ใส่วันครบรอบอีกครั้งก็เข้าได้')) return;
+    store.lock();
     location.reload();
   },
 };

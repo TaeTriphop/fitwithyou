@@ -1,37 +1,26 @@
-// เก็บข้อมูลบน Supabase: ทั้งคุณและแฟนเห็นข้อมูลชุดเดียวกันทุกเครื่อง
-// ใช้บัญชีเดียวร่วมกัน ล็อกอินครั้งเดียวต่อเครื่อง แล้ว Supabase จะจำไว้เอง
+// เก็บข้อมูลบน Supabase: คุณกับแฟนเห็นข้อมูลชุดเดียวกันทุกเครื่อง
+// ไม่มีการเข้าสู่ระบบ แต่ทุกคำขอจะแนบรหัสลับ (x-app-pin) ไปด้วย
+// Supabase ตรวจรหัสนี้เองผ่าน RLS (ดู supabase-setup.sql) รหัสจึงไม่ได้อยู่ในโค้ดนี้
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 
 const PAGE = 1000;
 
-export function createSupabaseAdapter({ url, anonKey }) {
-  const sb = createClient(url, anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
+export function createSupabaseAdapter({ url, anonKey, pin }) {
+  const sb = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { 'x-app-pin': pin } },
+  });
 
   const check = ({ error, data }) => {
-    if (error) throw new Error(error.message);
+    if (error) {
+      const msg = /row-level security/i.test(error.message) ? 'รหัสไม่ถูกต้อง หรือถูกเปลี่ยนแล้ว' : error.message;
+      throw new Error(msg);
+    }
     return data;
   };
 
   return {
     name: 'supabase',
-
-    async init() {
-      const { data } = await sb.auth.getSession();
-      if (!data.session) {
-        const err = new Error('ต้องเข้าสู่ระบบก่อน');
-        err.code = 'AUTH_REQUIRED';
-        throw err;
-      }
-    },
-
-    async signIn(email, password) {
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message === 'Invalid login credentials' ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' : error.message);
-    },
-
-    async signOut() {
-      await sb.auth.signOut();
-    },
 
     // อ่านทีละ 1,000 แถว (Supabase จำกัดต่อครั้ง) จนครบ
     async select(t) {

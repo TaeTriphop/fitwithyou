@@ -5,7 +5,7 @@ import { esc, icon, dot, avatar, thumb, sheet, toast } from '../ui.js';
 import * as D from '../domain.js';
 
 // open = ท่าที่เปิดบันทึกอยู่ ; panel = 'add' | 'plan' | null
-const st = { date: null, override: null, open: null, panel: null, pickQ: '' };
+const st = { date: null, override: null, open: null, panel: null, pickQ: '', pickCat: 'ทั้งหมด' };
 
 export function enter(p) {
   st.date = p.date;
@@ -13,6 +13,7 @@ export function enter(p) {
   st.open = null;
   st.panel = null;
   st.pickQ = '';
+  st.pickCat = 'ทั้งหมด';
 }
 
 const items = () => D.workoutItems(st.date, st.override);
@@ -25,7 +26,6 @@ async function ensureSession() {
       date: st.date,
       plan_weekday: D.planWeekdayFor(st.date, st.override),
       extra_items: [],
-      substitutions: [],
       finished_at: null,
     })
   );
@@ -54,9 +54,7 @@ function card(it, session, people) {
       return `<span class="person-row">${dot(p)}<span class="who">${esc(p.name)}</span><span class="grow">${esc(text)}</span>${status}</span>`;
     })
     .join('');
-  const from = it.replaces ? D.exerciseById(it.replaces) : null;
   const tags = [
-    from ? `<span class="tag accent">แทน ${esc(from.name)}</span>` : '',
     who.length && who.length < people.length ? `<span class="tag">เฉพาะ${esc(who[0].name)}</span>` : '',
     it.extra ? '<span class="tag">เฉพาะวันนี้</span>' : '',
   ].join('');
@@ -83,7 +81,7 @@ export function render() {
   return `
     <header class="wk-top">
       <a class="icon-btn" href="#/schedule" aria-label="กลับไปตาราง">${icon('back', 22)}</a>
-      <div class="stack-0 grow"><span class="muted">${D.fmtDayDate(st.date)}</span><strong>${st.date === D.todayISO() ? 'วันนี้' : 'บันทึกวันนั้น'}</strong></div>
+      <div class="stack-0 grow"><span class="muted">วัน${D.DAY_FULL[D.weekdayOf(st.date)]}</span><strong>${st.date === D.todayISO() ? 'วันนี้' : D.fmtDayDate(st.date)}</strong></div>
     </header>
     <div class="notice">
       <p>เล่นแผนวัน${D.DAY_FULL[wd]}${title ? ` · ${esc(title)}` : ''}</p>
@@ -112,7 +110,6 @@ function logSheet(list, people) {
   }
   const session = D.sessionOf(st.date);
   const who = people.filter((p) => it.who.includes(p.id));
-  const from = it.replaces ? D.exerciseById(it.replaces) : null;
 
   const blocks = who
     .map((p) => {
@@ -158,28 +155,14 @@ function logSheet(list, people) {
     })
     .join('');
 
-  const exclude = new Set(list.map((x) => x.exercise_id));
-  if (from) exclude.add(from.id);
-  const subs = D.substitutesFor(from || ex, exclude, 5)
-    .map(
-      (e) => `<div class="sub-row">${thumb(e, 'sm')}<span class="stack-0 grow"><strong>${esc(e.name)}</strong><span class="muted">${esc(e.muscles || e.categories.join(' · '))}</span></span>
-        <button type="button" class="btn-sm" data-act="swap" data-to="${e.id}">เล่นแทน</button></div>`,
-    )
-    .join('');
-
   return sheet({
     title: ex.name,
-    sub: from ? `เล่นแทน ${from.name} วันนี้` : ex.muscles || ex.categories.join(' · '),
+    sub: ex.muscles || ex.categories.join(' · '),
     body: `
       ${ex.image_url ? `<div class="hero">${thumb(ex, 'lg')}</div>` : ''}
       ${ex.video_url ? `<a class="btn-sm self-start" href="${esc(ex.video_url)}" target="_blank" rel="noopener">${icon('play', 14)}ดูคลิปตัวอย่าง</a>` : ''}
       ${who.length > 1 ? `<button type="button" class="btn-ghost" data-act="allDone">${icon('check', 18)}ทั้งคู่ครบทุกเซ็ท</button>` : ''}
       ${blocks}
-      <section class="stack-8">
-        <h3 class="label">${from ? 'เปลี่ยนเป็นท่าอื่น' : 'เครื่องไม่ว่าง? เล่นท่านี้แทนได้'}</h3>
-        ${from ? `<button type="button" class="btn-ghost" data-act="unswap">กลับไปเล่น ${esc(from.name)}</button>` : ''}
-        ${subs || '<p class="muted">ยังไม่มีท่าหมวดเดียวกันในคลัง</p>'}
-      </section>
       ${it.extra ? `<button type="button" class="btn-danger" data-act="removeExtra">${icon('trash', 18)}เอาท่านี้ออกจากวันนี้</button>` : ''}`,
     footer: '<button type="button" class="btn grow" data-act="closeSheet">เสร็จ</button>',
   });
@@ -205,8 +188,8 @@ function planSheet() {
 // ---------- แผ่นเพิ่มท่าเฉพาะวันนี้ ----------
 function pickResults(list) {
   const inDay = new Set(list.map((i) => i.exercise_id));
-  const found = D.searchExercises(st.pickQ, null).filter((e) => !inDay.has(e.id)).slice(0, 40);
-  if (!found.length) return `<p class="muted">${store.all('exercises').length ? 'ไม่เจอท่าที่ค้นหา' : 'คลังท่ายังว่าง เพิ่มท่าได้ที่แท็บคลังท่า'}</p>`;
+  const found = D.searchExercises(st.pickQ, st.pickCat).filter((e) => !inDay.has(e.id)).slice(0, 60);
+  if (!found.length) return `<p class="muted">${store.all('exercises').length ? 'ไม่มีท่าอื่นในหมวดนี้' : 'คลังท่ายังว่าง เพิ่มท่าได้ที่แท็บคลังท่า'}</p>`;
   return found
     .map(
       (e) => `<button type="button" class="lib-row" data-act="addExtra" data-id="${e.id}">${thumb(e, 'sm')}
@@ -217,11 +200,15 @@ function pickResults(list) {
 }
 
 function addSheet(list) {
+  const chips = ['ทั้งหมด', ...D.CATEGORIES]
+    .map((c) => `<button type="button" class="chip ${st.pickCat === c ? 'on' : ''}" data-act="pickCat" data-c="${c}" aria-pressed="${st.pickCat === c}">${c}</button>`)
+    .join('');
   return sheet({
     title: 'เพิ่มท่าเฉพาะวันนี้',
     sub: 'ไม่กระทบแผนหลัก',
-    body: `<label class="search">${icon('search')}<span class="sr-only">ค้นหาท่า</span>
-        <input id="pick-q" type="search" data-input="pick" value="${esc(st.pickQ)}" placeholder="ค้นหา เช่น ก้น, ขา" autocomplete="off"></label>
+    body: `<div class="chips in-sheet" role="group" aria-label="หมวด">${chips}</div>
+      <label class="search">${icon('search')}<span class="sr-only">ค้นหาท่า</span>
+        <input id="pick-q" type="search" data-input="pick" value="${esc(st.pickQ)}" placeholder="หรือพิมพ์ชื่อท่า" autocomplete="off"></label>
       <div id="pick-results" class="stack-8">${pickResults(list)}</div>`,
   });
 }
@@ -284,42 +271,14 @@ export const actions = {
     const wd = +d.wd;
     const s = D.sessionOf(st.date);
     st.panel = null;
-    if (s) await store.update('sessions', s.id, { plan_weekday: wd, substitutions: [] });
+    if (s) await store.update('sessions', s.id, { plan_weekday: wd });
     else {
       st.override = wd;
       rerender();
     }
   },
-  async swap(d) {
-    const it = openItem();
-    const s = await ensureSession();
-    if (D.resultsOfSession(s.id).some((r) => r.exercise_id === it.exercise_id)) {
-      return toast('ท่านี้บันทึกไปแล้ว ถ้าจะเปลี่ยน ให้แตะเซ็ทที่เลือกไว้ซ้ำเพื่อยกเลิกก่อน');
-    }
-    // ท่าใหม่ยังไม่เคยตั้งเป้า: ใช้เซ็ท/ครั้งเดียวกับท่าเดิม น้ำหนักค่อยปรับตอนเล่น
-    for (const pid of it.who) {
-      const old = D.targetOrDefault(pid, it.exercise_id);
-      await D.ensureTarget(pid, d.to, { weight: 0, sets: old.sets, reps: old.reps });
-    }
-    if (it.extra) {
-      await store.update('sessions', s.id, { extra_items: (s.extra_items || []).map((x) => (x.id === it.id ? { ...x, exercise_id: d.to } : x)) });
-    } else {
-      const original = it.replaces || it.exercise_id;
-      await store.update('sessions', s.id, { substitutions: [...(s.substitutions || []).filter((x) => x.from !== original), { from: original, to: d.to }] });
-    }
-    st.open = d.to;
-    rerender();
-    toast(`เปลี่ยนเป็น ${D.exerciseById(d.to)?.name} แล้ว`);
-  },
-  async unswap() {
-    const it = openItem();
-    const s = D.sessionOf(st.date);
-    if (!s || !it?.replaces) return;
-    const has = D.resultsOfSession(s.id).some((r) => r.exercise_id === it.exercise_id);
-    if (has && !confirm('ท่าที่เล่นแทนบันทึกผลไว้แล้ว ลบผลนั้นแล้วกลับไปท่าเดิมไหม?')) return;
-    await store.removeWhere('results', (r) => r.session_id === s.id && r.exercise_id === it.exercise_id);
-    await store.update('sessions', s.id, { substitutions: (s.substitutions || []).filter((x) => x.from !== it.replaces) });
-    st.open = it.replaces;
+  pickCat(d) {
+    st.pickCat = d.c;
     rerender();
   },
   openAdd() {

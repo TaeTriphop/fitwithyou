@@ -4,6 +4,7 @@ import { store } from './data/store.js';
 export const DAY_SHORT = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
 export const DAY_FULL = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'];
 export const MONTH_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+export const MONTH_FULL = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
 export const CATEGORIES = ['หลัง', 'อก', 'ไหล่', 'แขน', 'ขา', 'ก้น', 'ท้อง', 'คาร์ดิโอ'];
 
 const SYNONYMS = {
@@ -106,16 +107,12 @@ export function planWeekdayFor(date, override) {
   return override ?? weekdayOf(date);
 }
 
-// ท่าที่จะเล่นจริง = แผนของวันที่เลือก (หลังเปลี่ยนท่าทดแทน) + ท่าที่เพิ่มเฉพาะวันนี้
+// ท่าที่จะเล่นจริง = แผนของวันที่เลือก + ท่าที่เพิ่มเฉพาะวันนี้
 export function workoutItems(date, override) {
   const wd = planWeekdayFor(date, override);
   const s = sessionOf(date);
-  const subs = s?.substitutions || [];
   const valid = new Set(store.all('profiles').map((p) => p.id));
-  const planned = planItemsOf(wd).map((it) => {
-    const sub = subs.find((x) => x.from === it.exercise_id);
-    return sub ? { ...it, exercise_id: sub.to, replaces: it.exercise_id } : it;
-  });
+  const planned = planItemsOf(wd);
   const extras = (s?.extra_items || []).map((x) => ({ ...x, extra: true }));
   const seen = new Set();
   return [...planned, ...extras]
@@ -179,25 +176,6 @@ export function suggest(ex, h) {
   return null;
 }
 
-// ---------- ท่าทดแทน ----------
-export function substitutesFor(ex, exclude = new Set(), limit = 6) {
-  const words = (m) => (m || '').split('·').map((w) => w.trim()).filter(Boolean);
-  const mine = new Set(words(ex.muscles));
-  return store
-    .all('exercises')
-    .filter((e) => e.id !== ex.id && !exclude.has(e.id))
-    .map((e) => {
-      let score = e.categories[0] === ex.categories[0] ? 2 : 0;
-      score += e.categories.filter((c) => ex.categories.includes(c)).length;
-      score += words(e.muscles).filter((w) => mine.has(w)).length * 2;
-      return { e, score };
-    })
-    .filter((x) => x.score >= 2)
-    .sort((a, b) => b.score - a.score || a.e.name.localeCompare(b.e.name))
-    .slice(0, limit)
-    .map((x) => x.e);
-}
-
 // ---------- ค้นหาท่า ----------
 export function searchExercises(q, cat) {
   const words = (q || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -214,4 +192,55 @@ export function searchExercises(q, cat) {
       return words.every((w) => hay.includes(w));
     })
     .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+}
+
+// ---------- ภาพรวม ----------
+export const metricOf = (ex, r) => (isWeighted(ex) ? r.weight : r.target_reps);
+export const metricText = (ex, v) => (isWeighted(ex) ? `${fmtNum(v)} kg` : `${v} ${unitOf(ex)}`);
+
+// การเปลี่ยนแปลงจาก base ไป cur: kind = up | same | down, pct = เปอร์เซ็นต์ (ถ้าคำนวณได้)
+export function change(ex, base, cur) {
+  const a = metricOf(ex, base);
+  const b = metricOf(ex, cur);
+  const pct = a > 0 ? Math.round(((b - a) / a) * 100) : null;
+  if (b > a) return { kind: 'up', pct, text: pct != null ? `▲ +${pct}%` : '▲ พัฒนา' };
+  if (b < a) return { kind: 'down', pct, text: pct != null ? `▼ ${pct}%` : '▼ ลดลง' };
+  if (cur.sets_done > base.sets_done) return { kind: 'up', pct: 0, text: '▲ ครบมากขึ้น' };
+  if (cur.sets_done < base.sets_done) return { kind: 'down', pct: 0, text: '▼ ทำได้น้อยลง' };
+  return { kind: 'same', pct: 0, text: 'เท่าเดิม' };
+}
+
+// สรุปของคนหนึ่ง: เทียบครั้งแรกกับครั้งล่าสุดของทุกท่าที่เล่นอย่างน้อย 2 ครั้ง
+export function personSummary(pid) {
+  const tally = { up: 0, same: 0, down: 0 };
+  const pcts = [];
+  for (const ex of store.all('exercises')) {
+    const h = history(ex.id, pid);
+    if (h.length < 2) continue;
+    const c = change(ex, h[0], h[h.length - 1]);
+    tally[c.kind]++;
+    if (c.pct != null && metricOf(ex, h[0]) > 0) pcts.push(c.pct);
+  }
+  const avg = pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null;
+  return { tally, avg, total: tally.up + tally.same + tally.down };
+}
+
+// สถิติใหม่: ครั้งที่ทำได้มากกว่าทุกครั้งก่อนหน้า (ไม่นับครั้งแรก)
+export function personalRecords() {
+  const out = [];
+  for (const p of store.all('profiles')) {
+    for (const ex of store.all('exercises')) {
+      let best = null;
+      for (const e of history(ex.id, p.id)) {
+        const v = metricOf(ex, e);
+        if (best != null && v > best) out.push({ p, ex, date: e.date, value: v });
+        if (best == null || v > best) best = v;
+      }
+    }
+  }
+  return out.sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+export function daysPlayedBetween(from, to) {
+  return store.all('sessions').filter((s) => s.date >= from && s.date <= to && resultsOfSession(s.id).length).length;
 }
