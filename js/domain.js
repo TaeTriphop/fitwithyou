@@ -1,14 +1,11 @@
-// ตรรกะของแอพ: วันที่, แผน, การประเมินผล, คำแนะนำ, การค้นหา
-// ไฟล์นี้อ่านข้อมูลผ่าน store เท่านั้น จึงใช้ได้เหมือนเดิมเมื่อย้ายไป Supabase
+// ตรรกะของแอพ: วันที่, แผน, ผลการเล่น, การเปรียบเทียบ, ท่าทดแทน, การค้นหา
 import { store } from './data/store.js';
 
 export const DAY_SHORT = ['จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส', 'อา'];
 export const DAY_FULL = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'];
 export const MONTH_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-export const MONTH_FULL = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
 export const CATEGORIES = ['หลัง', 'อก', 'ไหล่', 'แขน', 'ขา', 'ก้น', 'ท้อง', 'คาร์ดิโอ'];
 
-// คำพ้องความหมาย: พิมพ์คำไหนก็ค้นเจอหมวดนั้น
 const SYNONYMS = {
   หลัง: 'back lat ปีก หลังบน หลังล่าง',
   อก: 'chest หน้าอก pec',
@@ -20,7 +17,7 @@ const SYNONYMS = {
   คาร์ดิโอ: 'cardio วิ่ง เผาผลาญ แอโรบิก',
 };
 
-// ---------- วันที่ (ใช้รูปแบบ YYYY-MM-DD ตามเวลาเครื่อง, จันทร์ = 0) ----------
+// ---------- วันที่ (YYYY-MM-DD ตามเวลาเครื่อง, จันทร์ = 0) ----------
 export function iso(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -47,20 +44,14 @@ export const fmtNum = (n) => String(Math.round((+n || 0) * 100) / 100);
 export const profiles = () => [...store.all('profiles')].sort((a, b) => a.sort - b.sort);
 export const profileById = (id) => store.all('profiles').find((p) => p.id === id);
 export const exerciseById = (id) => store.all('exercises').find((e) => e.id === id);
-
-export function unitOf(ex) {
-  return ex.kind === 'time' ? ex.unit || 'วิ' : 'ครั้ง';
-}
-export function amountStep(ex) {
-  if (ex.kind === 'time') return ex.unit === 'นาที' ? 1 : 5;
-  return 1;
-}
+export const isWeighted = (ex) => ex.kind === 'weight';
+export const unitOf = (ex) => (ex.kind === 'time' ? ex.unit || 'วิ' : 'ครั้ง');
+export const amountStep = (ex) => (ex.kind === 'time' ? (ex.unit === 'นาที' ? 1 : 5) : 1);
 
 // ---------- เป้าหมายรายคน (ใช้กับท่านั้นทุกวัน) ----------
 export function defaultTarget(ex) {
-  if (ex?.kind === 'time') return ex.unit === 'นาที' ? { weight: 0, sets: 1, reps: 20 } : { weight: 0, sets: 3, reps: 45 };
-  if (ex?.kind === 'reps') return { weight: 0, sets: 3, reps: 10 };
-  return { weight: 0, sets: 3, reps: 12 };
+  if (ex?.kind === 'time') return ex.unit === 'นาที' ? { weight: 0, sets: 1, reps: 20 } : { weight: 0, sets: 3, reps: 30 };
+  return { weight: 0, sets: 3, reps: ex?.kind === 'reps' ? 10 : 12 };
 }
 export function getTarget(pid, exId) {
   return store.all('targets').find((t) => t.profile_id === pid && t.exercise_id === exId);
@@ -68,19 +59,18 @@ export function getTarget(pid, exId) {
 export function targetOrDefault(pid, exId) {
   return getTarget(pid, exId) || { ...defaultTarget(exerciseById(exId)), profile_id: pid, exercise_id: exId };
 }
-export async function ensureTarget(pid, exId) {
+export async function ensureTarget(pid, exId, base) {
   const t = getTarget(pid, exId);
   if (t) return t;
-  return store.insert('targets', { profile_id: pid, exercise_id: exId, ...defaultTarget(exerciseById(exId)) });
+  return store.insert('targets', { profile_id: pid, exercise_id: exId, ...(base || defaultTarget(exerciseById(exId))) });
 }
 export function targetText(ex, t) {
   const u = unitOf(ex);
-  if (ex.kind === 'weight') return `${fmtNum(t.weight)} kg · ${t.sets}×${t.reps}`;
-  if (ex.kind === 'time') return t.sets === 1 ? `${t.reps} ${u}` : `${t.sets} × ${t.reps} ${u}`;
-  return `${t.sets}×${t.reps} ครั้ง`;
+  const sets = ex.kind === 'time' && t.sets === 1 ? `${t.reps} ${u}` : `${t.sets} เซ็ท × ${t.reps} ${u}`;
+  return isWeighted(ex) ? `${fmtNum(t.weight)} kg · ${sets}` : sets;
 }
 
-// ---------- โน้ตรายคนต่อท่า (เช่น ระดับเบาะ) ----------
+// ---------- โน้ตรายคนต่อท่า ----------
 export function noteOf(pid, exId) {
   return store.all('exercise_notes').find((n) => n.profile_id === pid && n.exercise_id === exId)?.note || '';
 }
@@ -91,48 +81,43 @@ export async function saveNote(pid, exId, note) {
   else if (value) await store.insert('exercise_notes', { profile_id: pid, exercise_id: exId, note: value }, { silent: true });
 }
 
-// ---------- แผนประจำสัปดาห์ + การย้ายวันเฉพาะสัปดาห์ ----------
-export const planDay = (wd) => store.all('plan_days').find((d) => d.weekday === wd);
+// ---------- แผนประจำสัปดาห์ ----------
 export const planItemsOf = (wd) =>
-  store.all('plan_items').filter((i) => i.weekday === wd).sort((a, b) => a.sort - b.sort);
-export const movesOfWeek = (ws) => store.all('day_moves').filter((m) => m.week_start === ws);
+  store
+    .all('plan_items')
+    .filter((i) => i.weekday === wd && exerciseById(i.exercise_id))
+    .sort((a, b) => a.sort - b.sort || (a.created_at < b.created_at ? -1 : 1));
 
 export function autoTitle(items) {
   const cats = [];
-  for (const it of items) {
-    for (const c of exerciseById(it.exercise_id)?.categories || []) if (!cats.includes(c)) cats.push(c);
-  }
+  for (const it of items) for (const c of exerciseById(it.exercise_id)?.categories || []) if (!cats.includes(c)) cats.push(c);
   return cats.slice(0, 3).join(' + ');
 }
+export const dayTitle = (wd) => autoTitle(planItemsOf(wd));
 
-export function effectiveDay(date) {
-  const ws = weekStartOf(date);
-  const wd = weekdayOf(date);
-  const moves = movesOfWeek(ws);
-  const movedOut = moves.find((m) => m.from_weekday === wd) || null;
-  const movedIn = moves.filter((m) => m.to_weekday === wd);
-  const sources = [];
-  if (!movedOut) sources.push(wd);
-  movedIn.forEach((m) => sources.push(m.from_weekday));
-  const items = sources.flatMap((s) => planItemsOf(s).map((i) => ({ ...i, source: s })));
-  const title = sources.map((s) => planDay(s)?.title).filter(Boolean).join(' / ');
-  return { date, weekday: wd, weekStart: ws, sources, items, title, movedOut, movedIn };
+// ---------- วันที่เล่นจริง ----------
+export const sessionOf = (date) => store.all('sessions').find((s) => s.date === date);
+export const resultsOfSession = (sid) => store.all('results').filter((r) => r.session_id === sid);
+
+// วันนี้ใช้แผนของวันไหน (เลือกเล่นแผนวันอื่นได้)
+export function planWeekdayFor(date, override) {
+  const s = sessionOf(date);
+  if (s && s.plan_weekday != null) return s.plan_weekday;
+  return override ?? weekdayOf(date);
 }
 
-export const sessionOf = (date) => store.all('sessions').find((s) => s.date === date);
-
-// ท่าที่จะเล่นในวันนั้นจริงๆ = แผน (รวมที่ย้ายมา) + ท่าที่เพิ่มเฉพาะวันนี้
-export function workoutItems(date) {
-  const day = effectiveDay(date);
+// ท่าที่จะเล่นจริง = แผนของวันที่เลือก (หลังเปลี่ยนท่าทดแทน) + ท่าที่เพิ่มเฉพาะวันนี้
+export function workoutItems(date, override) {
+  const wd = planWeekdayFor(date, override);
   const s = sessionOf(date);
   const subs = s?.substitutions || [];
-  const planned = day.items.map((it) => {
+  const valid = new Set(store.all('profiles').map((p) => p.id));
+  const planned = planItemsOf(wd).map((it) => {
     const sub = subs.find((x) => x.from === it.exercise_id);
     return sub ? { ...it, exercise_id: sub.to, replaces: it.exercise_id } : it;
   });
   const extras = (s?.extra_items || []).map((x) => ({ ...x, extra: true }));
   const seen = new Set();
-  const valid = new Set(store.all('profiles').map((p) => p.id));
   return [...planned, ...extras]
     .filter((it) => {
       if (seen.has(it.exercise_id) || !exerciseById(it.exercise_id)) return false;
@@ -142,158 +127,75 @@ export function workoutItems(date) {
     .map((it) => ({ ...it, who: (it.who || []).filter((id) => valid.has(id)) }));
 }
 
-// ---------- ผลการเล่น ----------
-export function logsOf(sessionId, exId, pid) {
-  return store
-    .all('set_logs')
-    .filter((l) => l.session_id === sessionId && l.exercise_id === exId && l.profile_id === pid)
-    .sort((a, b) => a.set_index - b.set_index);
+// ---------- ผลการเล่น (1 แถว ต่อ คน ต่อ ท่า ต่อ วัน) ----------
+export function resultOf(sessionId, exId, pid) {
+  return store.all('results').find((r) => r.session_id === sessionId && r.exercise_id === exId && r.profile_id === pid);
+}
+export const isComplete = (r) => r.sets_done >= r.target_sets;
+
+export function resultText(ex, r) {
+  const sets = `${r.sets_done}/${r.target_sets} เซ็ท`;
+  if (isWeighted(ex)) return `${fmtNum(r.weight)} kg · ${sets}`;
+  return `${sets} × ${r.target_reps} ${unitOf(ex)}`;
 }
 
-export function evaluate(logs, target) {
-  const goal = target.sets * target.reps;
-  let total = 0;
-  let complete = target.sets > 0;
-  for (let i = 0; i < target.sets; i++) {
-    const r = logs.find((x) => x.set_index === i)?.reps ?? 0;
-    total += Math.min(r, target.reps);
-    if (r < target.reps) complete = false;
-  }
-  return { total, goal, complete, pct: goal ? Math.round((total / goal) * 100) : 0, count: logs.length };
-}
-
-export function targetFromLogs(logs) {
-  return {
-    sets: logs[0]?.target_sets ?? logs.length,
-    reps: logs[0]?.target_reps ?? Math.max(0, ...logs.map((l) => l.reps)),
-  };
-}
-
-function entryFrom(date, logs) {
-  const target = targetFromLogs(logs);
-  return {
-    date,
-    logs,
-    target,
-    weight: Math.max(0, ...logs.map((l) => +l.weight || 0)),
-    best: Math.max(0, ...logs.map((l) => l.reps)),
-    ev: evaluate(logs, target),
-  };
-}
-
-export function resultFor(dayLogs, exId, pid, date) {
-  const logs = dayLogs.filter((l) => l.exercise_id === exId && l.profile_id === pid).sort((a, b) => a.set_index - b.set_index);
-  return logs.length ? entryFrom(date, logs) : null;
-}
-
+// ประวัติของคนหนึ่งในท่าหนึ่ง เรียงจากเก่าไปใหม่
 export function history(exId, pid) {
-  const bySession = new Map();
-  for (const l of store.all('set_logs')) {
-    if (l.exercise_id !== exId || l.profile_id !== pid) continue;
-    if (!bySession.has(l.session_id)) bySession.set(l.session_id, []);
-    bySession.get(l.session_id).push(l);
-  }
-  const sessions = new Map(store.all('sessions').map((s) => [s.id, s]));
-  const out = [];
-  for (const [sid, logs] of bySession) {
-    const s = sessions.get(sid);
-    if (!s) continue;
-    logs.sort((a, b) => a.set_index - b.set_index);
-    out.push(entryFrom(s.date, logs));
-  }
-  return out.sort((a, b) => (a.date < b.date ? -1 : 1));
+  const dates = new Map(store.all('sessions').map((s) => [s.id, s.date]));
+  return store
+    .all('results')
+    .filter((r) => r.exercise_id === exId && r.profile_id === pid && dates.has(r.session_id))
+    .map((r) => ({ ...r, weight: +r.weight || 0, date: dates.get(r.session_id) }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
 }
-
 export function lastBefore(exId, pid, date) {
   const h = history(exId, pid).filter((e) => e.date < date);
   return h[h.length - 1] || null;
 }
 
-export function trailingIncomplete(h) {
-  let n = 0;
-  for (let i = h.length - 1; i >= 0 && !h[i].ev.complete; i--) n++;
-  return n;
+// เทียบครั้งนี้กับครั้งก่อน
+export function compare(ex, prev, cur) {
+  if (!prev) return { kind: 'first', text: 'ครั้งแรก' };
+  if (isWeighted(ex)) {
+    const diff = Math.round((cur.weight - prev.weight) * 100) / 100;
+    if (diff > 0) return { kind: 'up', text: `พัฒนา +${fmtNum(diff)} kg` };
+    if (diff < 0) return { kind: 'down', text: `ลดลง ${fmtNum(diff)} kg` };
+  } else {
+    if (cur.target_reps > prev.target_reps) return { kind: 'up', text: `พัฒนา +${cur.target_reps - prev.target_reps} ${unitOf(ex)}` };
+    if (cur.target_reps < prev.target_reps) return { kind: 'down', text: `ลดลง ${cur.target_reps - prev.target_reps} ${unitOf(ex)}` };
+  }
+  if (cur.sets_done > prev.sets_done) return { kind: 'up', text: 'ครบมากขึ้น' };
+  if (cur.sets_done < prev.sets_done) return { kind: 'down', text: 'ทำได้น้อยลง' };
+  return { kind: 'same', text: 'เท่าเดิม' };
 }
 
-export const metric = (ex, entry) => (ex.kind === 'weight' ? entry.weight : entry.best);
-export const metricText = (ex, v) => (ex.kind === 'weight' ? `${fmtNum(v)} kg` : `${v} ${unitOf(ex)}`);
-export const amountsText = (entry) => entry.logs.map((l) => l.reps).join(' / ');
-export function resultText(ex, entry) {
-  return ex.kind === 'weight' ? `${fmtNum(entry.weight)} kg · ${amountsText(entry)}` : `${amountsText(entry)} ${unitOf(ex)}`;
+// คำแนะนำครั้งหน้า: ดูจาก 2 ครั้งล่าสุด
+export function suggest(ex, h) {
+  if (!isWeighted(ex) || h.length < 2) return null;
+  const [a, b] = h.slice(-2);
+  if (a.weight !== b.weight) return null;
+  if (isComplete(a) && isComplete(b)) return { text: `ครบ 2 ครั้งติดแล้ว ลองเพิ่มเป็น ${fmtNum(b.weight + 2.5)} kg`, weight: b.weight + 2.5 };
+  if (!isComplete(a) && !isComplete(b) && b.weight >= 2.5) return { text: `ไม่ครบ 2 ครั้งติด ลองลดเป็น ${fmtNum(b.weight - 2.5)} kg`, weight: b.weight - 2.5 };
+  return null;
 }
 
-// คำแนะนำครั้งหน้า (เทียบกับครั้งก่อนหน้าด้วย)
-export function suggest(ex, target, ev, prev) {
-  if (!ev.count) return null;
-  const isWeight = ex.kind === 'weight';
-  const u = unitOf(ex);
-  const step = isWeight ? 2.5 : amountStep(ex);
-  const prevComplete = prev?.ev.complete;
-  const prevIncomplete = prev && !prev.ev.complete;
-
-  if (ev.complete) {
-    if (isWeight) {
-      const next = target.weight + step;
-      return prevComplete
-        ? { text: `ครบ 2 ครั้งติดแล้ว ขยับเป็น ${fmtNum(next)} kg ได้เลย`, apply: { field: 'weight', value: next, label: `ใช้ ${fmtNum(next)} kg ครั้งหน้า` } }
-        : { text: `ครบทุกเซ็ท ถ้าครั้งหน้าครบอีก ค่อยขยับเป็น ${fmtNum(next)} kg`, apply: null };
-    }
-    const next = target.reps + step;
-    return prevComplete
-      ? { text: `ครบ 2 ครั้งติดแล้ว เพิ่มเป้าเป็น ${next} ${u} ได้เลย`, apply: { field: 'reps', value: next, label: `ตั้งเป้า ${next} ${u}` } }
-      : { text: `ครบทุกเซ็ท ถ้าครั้งหน้าครบอีก ค่อยเพิ่มเป้าเป็น ${next} ${u}`, apply: null };
-  }
-
-  if (ev.pct >= 80) {
-    return { text: `ได้ ${ev.pct}% ${isWeight ? `ใช้ ${fmtNum(target.weight)} kg เท่าเดิม` : 'เป้าเท่าเดิม'} ลองให้ครบทุกเซ็ท`, apply: null };
-  }
-
-  if (isWeight) {
-    const lower = Math.max(0, target.weight - step);
-    return prevIncomplete
-      ? { text: `ไม่ครบ 2 ครั้งติด ลองลดเป็น ${fmtNum(lower)} kg ให้ครบก่อน`, apply: { field: 'weight', value: lower, label: `ใช้ ${fmtNum(lower)} kg ครั้งหน้า` } }
-      : { text: `ได้ ${ev.pct}% ถ้าครั้งหน้ายังไม่ถึง ลองลดเป็น ${fmtNum(lower)} kg`, apply: null };
-  }
-  const lower = Math.max(step, target.reps - step);
-  return prevIncomplete
-    ? { text: `ไม่ครบ 2 ครั้งติด ลองลดเป้าเป็น ${lower} ${u}`, apply: { field: 'reps', value: lower, label: `ตั้งเป้า ${lower} ${u}` } }
-    : { text: `ได้ ${ev.pct}% ถ้าครั้งหน้ายังไม่ถึง ลองลดเป้าเป็น ${lower} ${u}`, apply: null };
-}
-
-// ---------- สรุปรายวัน / รายสัปดาห์ ----------
-export function dayInfo(date) {
-  const day = effectiveDay(date);
-  const session = sessionOf(date);
-  const items = workoutItems(date);
-  const logs = session ? store.all('set_logs').filter((l) => l.session_id === session.id) : [];
-  let status;
-  if (logs.length) {
-    let all = true;
-    for (const it of items) {
-      for (const pid of it.who) {
-        const r = resultFor(logs, it.exercise_id, pid, date);
-        if (!r || !r.ev.complete) all = false;
-      }
-    }
-    status = all ? 'done' : 'partial';
-  } else if (!items.length) status = 'rest';
-  else if (date < todayISO()) status = 'missed';
-  else status = 'planned';
-  return { ...day, items, session, logs, status };
-}
-
-export function weekCoverage(ws) {
-  const planned = new Set();
-  const done = new Set();
-  const logs = store.all('set_logs');
-  for (let i = 0; i < 7; i++) {
-    const date = addDays(ws, i);
-    for (const it of workoutItems(date)) exerciseById(it.exercise_id)?.categories.forEach((c) => planned.add(c));
-    const s = sessionOf(date);
-    if (!s) continue;
-    for (const l of logs) if (l.session_id === s.id) exerciseById(l.exercise_id)?.categories.forEach((c) => done.add(c));
-  }
-  return CATEGORIES.filter((c) => planned.has(c) || done.has(c)).map((c) => ({ label: c, done: done.has(c) }));
+// ---------- ท่าทดแทน ----------
+export function substitutesFor(ex, exclude = new Set(), limit = 6) {
+  const words = (m) => (m || '').split('·').map((w) => w.trim()).filter(Boolean);
+  const mine = new Set(words(ex.muscles));
+  return store
+    .all('exercises')
+    .filter((e) => e.id !== ex.id && !exclude.has(e.id))
+    .map((e) => {
+      let score = e.categories[0] === ex.categories[0] ? 2 : 0;
+      score += e.categories.filter((c) => ex.categories.includes(c)).length;
+      score += words(e.muscles).filter((w) => mine.has(w)).length * 2;
+      return { e, score };
+    })
+    .filter((x) => x.score >= 2)
+    .sort((a, b) => b.score - a.score || a.e.name.localeCompare(b.e.name))
+    .slice(0, limit)
+    .map((x) => x.e);
 }
 
 // ---------- ค้นหาท่า ----------
@@ -312,24 +214,4 @@ export function searchExercises(q, cat) {
       return words.every((w) => hay.includes(w));
     })
     .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
-}
-
-// ท่าทดแทน: หมวดเดียวกัน + กล้ามเนื้อที่โดนคล้ายกัน คะแนนสูงอยู่บน
-export function substitutesFor(ex, exclude = new Set(), limit = 6) {
-  const words = (m) => (m || '').split('·').map((w) => w.trim()).filter(Boolean);
-  const mine = new Set(words(ex.muscles));
-  return store
-    .all('exercises')
-    .filter((e) => e.id !== ex.id && !exclude.has(e.id))
-    .map((e) => {
-      let score = e.categories[0] === ex.categories[0] ? 2 : 0;
-      score += e.categories.filter((c) => ex.categories.includes(c)).length;
-      score += words(e.muscles).filter((w) => mine.has(w)).length * 2;
-      if (e.kind !== ex.kind && (e.kind === 'time' || ex.kind === 'time')) score -= 3;
-      return { e, score };
-    })
-    .filter((x) => x.score >= 3)
-    .sort((a, b) => b.score - a.score || a.e.name.localeCompare(b.e.name))
-    .slice(0, limit)
-    .map((x) => x.e);
 }

@@ -2,7 +2,7 @@
   "name": "FitWithYou",
   "short_name": "FitWithYou",
   "lang": "th",
-  "start_url": "./#/week",
+  "start_url": "./#/schedule",
   "scope": "./",
   "display": "standalone",
   "background_color": "#F3F3EF",

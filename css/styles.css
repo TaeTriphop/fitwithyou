@@ -256,6 +256,7 @@ a { color: var(--accent); }
   white-space: nowrap;
 }
 .tag.warn { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+.tag.ok { background: var(--ok-bg); color: var(--ok); font-weight: 600; }
 .tag.accent { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
 
 .st-ok { color: var(--ok); font-weight: 600; font-size: 13px; white-space: nowrap; }
@@ -510,3 +511,32 @@ button.stepper-val { width: auto !important; height: 46px; border: 0; background
   .stepper > button { width: 38px; }
   .day-sub { font-size: 10px; }
 }
+
+/* ---------- v2: บันทึกผล ภาพรวม เข้าสู่ระบบ ---------- */
+.stack-10 { display: flex; flex-direction: column; gap: 10px; }
+.person-block { border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.sets-pick { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(48px, 1fr); gap: 6px; }
+.sets-pick button {
+  min-height: 48px; border-radius: var(--r-sm);
+  border: 1px solid var(--line-2); background: var(--surface);
+  font-size: 16px; font-weight: 600; padding: 0 8px;
+}
+.sets-pick button.full { grid-column: span 2; }
+.sets-pick button.on.ok { background: var(--ok); border-color: var(--ok); color: #FFFFFF; }
+.sets-pick button.on.warn { background: var(--warn); border-color: var(--warn); color: #FFFFFF; }
+@media (prefers-color-scheme: dark) {
+  .sets-pick button.on.ok, .sets-pick button.on.warn { color: #121314; }
+}
+button.stepper-val { cursor: text; }
+.list-btn.is-on { border-color: var(--ink); }
+
+.cmp { display: flex; flex-direction: column; gap: 4px; }
+.cmp-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 14px; padding-left: 17px; }
+.hist-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.hist-row:first-child { border-top: 0; }
+.hist-date { width: 52px; flex-shrink: 0; }
+a.card.is-btn { text-decoration: none; }
+
+.login { max-width: 360px; margin: 10vh auto 0; display: flex; flex-direction: column; gap: 14px; text-align: center; }
+.login img { margin: 0 auto; border-radius: 18px; }
+.login .field { text-align: left; }

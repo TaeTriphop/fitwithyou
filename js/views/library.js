@@ -5,8 +5,8 @@ import { esc, icon, dot, thumb, sheet, toast, imageUrlProblem, IMAGE_HINT } from
 import * as D from '../domain.js';
 
 const KINDS = [
-  ['weight', 'น้ำหนัก × ครั้ง'],
-  ['reps', 'นับครั้ง'],
+  ['weight', 'ใช้น้ำหนัก'],
+  ['reps', 'ไม่ใช้น้ำหนัก'],
   ['time', 'จับเวลา'],
 ];
 
@@ -29,15 +29,17 @@ function results() {
         ${thumb(e, 'sm')}
         <span class="stack-0 grow">
           <strong>${esc(e.name)}</strong>
-          <span class="muted">${esc(e.muscles)} · ${esc(e.equipment)}</span>
+          <span class="muted">${esc([e.muscles || e.categories.join(' · '), e.equipment].filter(Boolean).join(' · '))}</span>
           ${days.length ? `<span class="in-days">อยู่ในวัน ${days.map((i) => D.DAY_SHORT[i]).join(', ')}</span>` : ''}
         </span>
         <span class="add-ic">${inTarget ? icon('check') : icon('plus')}</span>
       </button>`;
     })
     .join('');
-  return `<p class="muted" aria-live="polite">พบ ${list.length} ท่า</p>
-    ${rows || '<div class="empty"><p>ไม่เจอท่าที่ค้นหา ลองคำอื่น หรือเพิ่มท่าใหม่เอง</p><button type="button" class="btn-ghost" data-act="openCreate">' + icon('plus', 18) + 'เพิ่มท่าใหม่</button></div>'}`;
+  return `${store.all('exercises').length ? `<p class="muted" aria-live="polite">พบ ${list.length} ท่า</p>` : ''}
+    ${rows || (store.all('exercises').length
+      ? `<div class="empty"><p>ไม่เจอท่าที่ค้นหา ลองคำอื่น หรือเพิ่มท่าใหม่เอง</p><button type="button" class="btn-ghost" data-act="openCreate">${icon('plus', 18)}เพิ่มท่าใหม่</button></div>`
+      : `<div class="empty"><h3>คลังท่ายังว่าง</h3><p>เริ่มจากท่าที่คุณกับแฟนเล่นประจำ ใส่แค่ชื่อกับหมวดก็พอ</p><button type="button" class="btn" data-act="openCreate">${icon('plus', 18)}เพิ่มท่าแรก</button></div>`)}`;
 }
 
 export function render() {
@@ -46,7 +48,7 @@ export function render() {
     .join('');
   const banner =
     st.day != null
-      ? `<div class="notice accent"><p>กำลังเพิ่มท่าลงวัน${D.DAY_FULL[st.day]} แตะท่าที่ต้องการ</p><a class="btn-link" href="#/plan">เสร็จ</a></div>`
+      ? `<div class="notice accent"><p>กำลังเพิ่มท่าลงวัน${D.DAY_FULL[st.day]} แตะท่าที่ต้องการ</p><a class="btn-link" href="#/schedule/day/${st.day}">เสร็จ</a></div>`
       : '';
   return `
     <header class="page-head">
@@ -93,7 +95,7 @@ function assignSheet() {
       return h
         .map(
           (e) => `<div class="person-row">${dot(p)}<span class="who">${esc(p.name)}</span><span class="grow">${esc(D.resultText(ex, e))}</span>
-            <span class="${e.ev.complete ? 'st-ok' : 'st-warn'}">${e.ev.complete ? 'ครบ' : `${e.ev.total}/${e.ev.goal}`}</span>
+            <span class="${D.isComplete(e) ? 'st-ok' : 'st-warn'}">${D.isComplete(e) ? 'ครบ' : 'ไม่ครบ'}</span>
             <span class="muted nowrap">${D.fmtShortDate(e.date)}</span></div>`,
         )
         .join('');
@@ -103,7 +105,7 @@ function assignSheet() {
   const subs = D.substitutesFor(ex, new Set(), 5)
     .map(
       (e) => `<button type="button" class="sub-row as-btn" data-act="open" data-id="${e.id}">${thumb(e, 'sm')}
-        <span class="stack-0 grow"><strong>${esc(e.name)}</strong><span class="muted">${esc(e.muscles)} · ${esc(e.equipment)}</span></span>${icon('next', 18)}</button>`,
+        <span class="stack-0 grow"><strong>${esc(e.name)}</strong><span class="muted">${esc([e.muscles || e.categories.join(' · '), e.equipment].filter(Boolean).join(' · '))}</span></span>${icon('next', 18)}</button>`,
     )
     .join('');
 
@@ -111,7 +113,7 @@ function assignSheet() {
   const inPlan = store.all('plan_items').some((i) => i.exercise_id === ex.id);
   return sheet({
     title: ex.name,
-    sub: `${ex.muscles} · ${ex.equipment}`,
+    sub: [ex.muscles || ex.categories.join(' · '), ex.equipment].filter(Boolean).join(' · '),
     body: `
       ${ex.image_url ? `<div class="hero">${thumb(ex, 'lg')}</div>` : ''}
       <div class="row wrap">
@@ -133,7 +135,7 @@ function formSheet() {
   const f = st.sheet.form;
   const isEdit = !!f.id;
   const ex = isEdit ? D.exerciseById(f.id) : null;
-  const hasLogs = isEdit && store.all('set_logs').some((l) => l.exercise_id === f.id);
+  const hasLogs = isEdit && store.all('results').some((l) => l.exercise_id === f.id);
   const catBtns = D.CATEGORIES.map((c) => {
     const on = f.categories.includes(c);
     return `<button type="button" class="chip ${on ? 'on' : ''}" data-act="formCat" data-c="${c}" aria-pressed="${on}">${c}</button>`;
@@ -144,15 +146,15 @@ function formSheet() {
     .join('');
   const input = (field, label, ph, type = 'text') =>
     `<label class="field"><span class="label">${label}</span><input class="input" type="${type}" data-input="form" data-f="${field}" value="${esc(f[field])}" placeholder="${ph}" ${type === 'url' ? 'inputmode="url"' : ''}></label>`;
-  const canDelete = isEdit && ex?.is_custom && !hasLogs;
+  const canDelete = isEdit && !hasLogs;
   return sheet({
     title: isEdit ? 'แก้ไขท่า' : 'เพิ่มท่าใหม่',
     sub: isEdit ? ex?.name : '',
     body: `
       ${input('name', 'ชื่อท่า', 'เช่น Smith Machine Squat')}
-      ${input('muscles', 'กล้ามเนื้อที่โดน', 'เช่น ขาหน้า · ก้น')}
+      ${input('muscles', 'กล้ามเนื้อที่โดน (ไม่ใส่ก็ได้)', 'เช่น ขาหน้า · ก้น')}
       <div class="field"><span class="label">หมวด (ใช้ค้นหา เลือกได้หลายหมวด)</span><div class="row wrap">${catBtns}</div></div>
-      ${input('equipment', 'อุปกรณ์', 'เช่น เครื่อง, ดัมเบล, เคเบิล')}
+      ${input('equipment', 'อุปกรณ์ (ไม่ใส่ก็ได้)', 'เช่น เครื่อง, ดัมเบล, เคเบิล')}
       <div class="field"><span class="label">บันทึกแบบไหน</span><div class="seg seg-btns">${kindBtns}</div></div>
       ${f.kind === 'time' ? `<div class="field"><span class="label">หน่วยเวลา</span><div class="seg seg-btns">${unitBtns}</div></div>` : ''}
       ${input('video_url', 'คลิปตัวอย่าง (ไม่ใส่ก็ได้)', 'ลิงก์จาก YouTube, Instagram หรือ TikTok', 'url')}
@@ -160,7 +162,7 @@ function formSheet() {
       <p class="muted">${IMAGE_HINT}</p>
       <div id="img-preview" class="hero">${f.image_url ? thumb({ image_url: f.image_url }, 'lg') : ''}</div>
       ${canDelete ? `<button type="button" class="btn-danger" data-act="deleteEx">${icon('trash', 18)}ลบท่านี้</button>` : ''}
-      ${isEdit && hasLogs && ex?.is_custom ? '<p class="muted">ท่านี้มีประวัติการเล่นแล้ว จึงลบไม่ได้ แต่แก้ไขได้</p>' : ''}`,
+      ${isEdit && hasLogs ? '<p class="muted">ท่านี้มีประวัติการเล่นแล้ว จึงลบไม่ได้ แต่แก้ไขได้</p>' : ''}`,
     footer: `<button type="button" class="btn-ghost" data-act="closeSheet">ยกเลิก</button>
       <button type="button" class="btn grow" data-act="saveForm">${isEdit ? 'บันทึก' : 'เพิ่มท่า'}</button>`,
   });
@@ -269,8 +271,8 @@ export const actions = {
     if (imgProblem) return toast(imgProblem);
     const row = {
       name,
-      muscles: f.muscles.trim() || f.categories.join(' · '),
-      equipment: f.equipment.trim() || '-',
+      muscles: f.muscles.trim(),
+      equipment: f.equipment.trim(),
       categories: f.categories,
       kind: f.kind,
       unit: f.kind === 'time' ? f.unit : null,
@@ -282,7 +284,7 @@ export const actions = {
       st.sheet = { type: 'assign', ...assignStateFor(f.id) };
       toast('บันทึกแล้ว');
     } else {
-      const created = await store.insert('exercises', { id: 'ex-' + uid(), is_custom: true, ...row });
+      const created = await store.insert('exercises', { id: 'ex-' + uid(), ...row });
       st.q = '';
       st.sheet = { type: 'assign', ...assignStateFor(created.id) };
       toast('เพิ่มท่าแล้ว เลือกวันที่จะเล่นได้เลย');

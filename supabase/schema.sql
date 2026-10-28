@@ -1,11 +1,14 @@
--- โครงสร้างตารางบน Supabase ให้ตรงกับข้อมูลในแอพ (ชื่อคอลัมน์เหมือนกันทุกตัว)
--- วิธีใช้: Supabase Dashboard > SQL Editor > วางทั้งไฟล์ > Run
+-- FitWithYou: สร้างตารางบน Supabase
+-- วิธีใช้: Supabase Dashboard > SQL Editor > New query > วางทั้งไฟล์ > Run
+-- ถ้าเคยรันเวอร์ชันเก่าไว้แล้ว บรรทัด drop ด้านล่างจะล้างของเก่าออกก่อน (ข้อมูลเดิมจะหายทั้งหมด)
+
+drop table if exists set_logs, results, exercise_notes, targets, plan_items, plan_days, day_moves, sessions, exercises, profiles cascade;
 
 create table profiles (
   id text primary key,
   name text not null,
   color text not null,
-  avatar_url text default '',
+  avatar_url text not null default '',
   sort int not null default 0,
   created_at timestamptz not null default now()
 );
@@ -13,24 +16,17 @@ create table profiles (
 create table exercises (
   id text primary key,
   name text not null,
-  muscles text,
-  equipment text,
+  muscles text not null default '',
+  equipment text not null default '',
   categories text[] not null default '{}',
   kind text not null default 'weight' check (kind in ('weight', 'reps', 'time')),
   unit text,
-  video_url text default '',
-  image_url text default '',
-  is_custom boolean not null default false,
+  video_url text not null default '',
+  image_url text not null default '',
   created_at timestamptz not null default now()
 );
 
-create table plan_days (
-  id text primary key,
-  weekday smallint not null unique check (weekday between 0 and 6),
-  title text not null default '',
-  created_at timestamptz not null default now()
-);
-
+-- ท่าไหนอยู่ในแผนวันไหน (0 = จันทร์ ... 6 = อาทิตย์) และใครเล่น
 create table plan_items (
   id text primary key,
   weekday smallint not null check (weekday between 0 and 6),
@@ -40,6 +36,7 @@ create table plan_items (
   created_at timestamptz not null default now()
 );
 
+-- เป้าหมายและน้ำหนักปัจจุบันของแต่ละคนต่อท่า
 create table targets (
   id text primary key,
   profile_id text not null references profiles(id) on delete cascade,
@@ -51,36 +48,29 @@ create table targets (
   unique (profile_id, exercise_id)
 );
 
-create table day_moves (
-  id text primary key,
-  week_start date not null,
-  from_weekday smallint not null check (from_weekday between 0 and 6),
-  to_weekday smallint not null check (to_weekday between 0 and 6),
-  created_at timestamptz not null default now(),
-  unique (week_start, from_weekday)
-);
-
+-- วันที่ไปเล่นจริง ใช้แผนของวันไหน + ท่าที่เปลี่ยน/เพิ่มเฉพาะวันนั้น
 create table sessions (
   id text primary key,
   date date not null unique,
+  plan_weekday smallint check (plan_weekday between 0 and 6),
   extra_items jsonb not null default '[]',
   substitutions jsonb not null default '[]',
   finished_at timestamptz,
   created_at timestamptz not null default now()
 );
 
-create table set_logs (
+-- ผลการเล่น: 1 แถว ต่อ คน ต่อ ท่า ต่อ วัน
+create table results (
   id text primary key,
   session_id text not null references sessions(id) on delete cascade,
-  exercise_id text not null references exercises(id),
-  profile_id text not null references profiles(id),
-  set_index int not null,
+  exercise_id text not null references exercises(id) on delete cascade,
+  profile_id text not null references profiles(id) on delete cascade,
   weight numeric not null default 0,
-  reps int not null,
-  target_sets int,
-  target_reps int,
+  sets_done int not null,
+  target_sets int not null,
+  target_reps int not null,
   created_at timestamptz not null default now(),
-  unique (session_id, exercise_id, profile_id, set_index)
+  unique (session_id, exercise_id, profile_id)
 );
 
 create table exercise_notes (
@@ -92,14 +82,18 @@ create table exercise_notes (
   unique (profile_id, exercise_id)
 );
 
--- ความปลอดภัย: เปิด RLS ทุกตาราง ให้เข้าถึงได้เฉพาะคนที่ล็อกอินแล้ว (บัญชีที่ใช้ร่วมกัน)
--- คนที่มีแค่ลิงก์เว็บแต่ไม่ได้ล็อกอิน จะอ่านหรือแก้ข้อมูลไม่ได้
+-- ความปลอดภัย: เข้าถึงได้เฉพาะคนที่เข้าสู่ระบบแล้วเท่านั้น
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','exercises','plan_days','plan_items','targets','day_moves','sessions','set_logs','exercise_notes']
+  foreach t in array array['profiles','exercises','plan_items','targets','sessions','results','exercise_notes']
   loop
     execute format('alter table %I enable row level security', t);
     execute format('create policy "signed-in full access" on %I for all to authenticated using (true) with check (true)', t);
   end loop;
 end $$;
+
+-- คุณกับแฟน (แก้ชื่อและใส่รูปได้ในแอพ)
+insert into profiles (id, name, color, sort) values
+  ('p-me', 'ฉัน', '#2251CC', 0),
+  ('p-fan', 'แฟน', '#C2580F', 1);

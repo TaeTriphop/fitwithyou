@@ -54,13 +54,14 @@ export function imageUrlProblem(url) {
   const u = (url || '').trim();
   if (!u) return null;
   if (!/^https?:\/\//i.test(u)) return 'ลิงก์รูปต้องขึ้นต้นด้วย https://';
-  if (/pin\.it\/|pinterest\.[a-z.]+\/pin\//i.test(u)) {
-    return 'ลิงก์นี้เป็นหน้าเว็บ Pinterest ไม่ใช่ตัวรูป ให้กดค้างที่รูปแล้วเลือก "คัดลอกที่อยู่รูปภาพ"';
+  if (/pin\.it\/|pinterest\.[a-z.]+\/pin\/|instagram\.com\/(p|reel)\/|tiktok\.com\/|youtube\.com\/|youtu\.be\//i.test(u)) {
+    return 'ลิงก์นี้เป็นหน้าโพสต์ ไม่ใช่ตัวรูป ให้กดค้างที่รูปแล้วเลือก "คัดลอกที่อยู่รูปภาพ"';
   }
   return null;
 }
 
-export const IMAGE_HINT = 'ใช้ลิงก์ของตัวรูปโดยตรง เช่นจาก Pinterest ให้กดค้างที่รูปแล้วเลือก "คัดลอกที่อยู่รูปภาพ" (มักขึ้นต้นด้วย i.pinimg.com)';
+export const IMAGE_HINT =
+  'ใช้รูปจากเว็บไหนก็ได้ เช่น Pinterest หรือ Google รูปภาพ: กดค้างที่รูป แล้วเลือก "คัดลอกที่อยู่รูปภาพ" มาวาง (ลิงก์โพสต์ IG/TikTok ใช้เป็นรูปไม่ได้)';
 
 let toastTimer;
 export function toast(msg) {
@@ -95,10 +96,4 @@ export function stepper({ value, dec, inc, label, cls = '' }) {
     <span class="stepper-val">${esc(value)}</span>
     <button type="button" ${inc} aria-label="เพิ่ม${esc(label)}">+</button>
   </div>`;
-}
-
-export function scheduleTabs(active) {
-  const tab = (key, href, label) =>
-    `<a href="${href}" class="${active === key ? 'on' : ''}" ${active === key ? 'aria-current="page"' : ''}>${label}</a>`;
-  return `<nav class="seg" aria-label="มุมมองตาราง">${tab('week', '#/week', 'สัปดาห์นี้')}${tab('plan', '#/plan', 'แผนของเรา')}</nav>`;
 }

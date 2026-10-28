@@ -2,17 +2,18 @@ import { store } from './data/store.js';
 import { buildSeed } from './data/seed.js';
 import { setRenderer } from './core.js';
 import { esc, toast } from './ui.js';
-import * as weekView from './views/week.js';
-import * as planView from './views/plan.js';
+import * as scheduleView from './views/schedule.js';
 import * as workoutView from './views/workout.js';
+import * as overviewView from './views/overview.js';
 import * as libraryView from './views/library.js';
 import * as settingsView from './views/settings.js';
+import * as loginView from './views/login.js';
 
-// [รูปแบบ hash, หน้าจอ, แท็บที่ไฮไลต์ (null = ซ่อนแถบล่าง), ตัวแปลงพารามิเตอร์]
+// [รูปแบบ hash, หน้าจอ, แท็บที่ไฮไลต์ (null = ซ่อนแถบล่าง), พารามิเตอร์]
 const ROUTES = [
-  [/^#\/week(?:\/(\d{4}-\d{2}-\d{2}))?$/, weekView, 'week', (m) => ({ date: m[1] || null })],
-  [/^#\/plan$/, planView, 'week', () => ({})],
-  [/^#\/workout\/(\d{4}-\d{2}-\d{2})$/, workoutView, null, (m) => ({ date: m[1] })],
+  [/^#\/schedule(?:\/day\/(\d))?$/, scheduleView, 'schedule', (m) => ({ day: m[1] != null ? +m[1] : null })],
+  [/^#\/workout\/(\d{4}-\d{2}-\d{2})(?:\/plan\/(\d))?$/, workoutView, null, (m) => ({ date: m[1], plan: m[2] != null ? +m[2] : null })],
+  [/^#\/overview(?:\/ex\/([\w-]+))?$/, overviewView, 'overview', (m) => ({ ex: m[1] || null })],
   [/^#\/library(?:\/day\/(\d))?$/, libraryView, 'library', (m) => ({ day: m[1] != null ? +m[1] : null })],
   [/^#\/settings$/, settingsView, 'settings', () => ({})],
 ];
@@ -20,25 +21,27 @@ const ROUTES = [
 const viewEl = document.getElementById('view');
 const tabbar = document.getElementById('tabbar');
 let current = null;
+let ready = false;
 
 function resolve() {
-  const hash = location.hash || '#/week';
+  const hash = location.hash || '#/schedule';
   for (const [re, view, tab, params] of ROUTES) {
     const m = hash.match(re);
     if (m) return { view, tab, params: params(m), hash };
   }
-  return { view: weekView, tab: 'week', params: { date: null }, hash: '#/week' };
+  return { view: scheduleView, tab: 'schedule', params: { day: null }, hash: '#/schedule' };
 }
 
 function render() {
   if (!current) return;
   // จำตำแหน่งเลื่อนในแผ่นเด้งไว้ ไม่ให้เด้งกลับขึ้นบนทุกครั้งที่กดบันทึก
-  const prevSheet = viewEl.querySelector('.sheet-body');
+  const prevBody = viewEl.querySelector('.sheet-body');
   const prevKey = viewEl.querySelector('.sheet')?.getAttribute('aria-label');
-  const sheetScroll = prevSheet ? prevSheet.scrollTop : 0;
+  const scroll = prevBody ? prevBody.scrollTop : 0;
   viewEl.innerHTML = current.view.render(current.params);
-  const nextSheet = viewEl.querySelector('.sheet-body');
-  if (nextSheet && prevSheet && viewEl.querySelector('.sheet')?.getAttribute('aria-label') === prevKey) nextSheet.scrollTop = sheetScroll;
+  const nextBody = viewEl.querySelector('.sheet-body');
+  if (nextBody && prevBody && viewEl.querySelector('.sheet')?.getAttribute('aria-label') === prevKey) nextBody.scrollTop = scroll;
+
   tabbar.hidden = !current.tab;
   document.body.classList.toggle('no-tabbar', !current.tab);
   tabbar.querySelectorAll('a').forEach((a) => {
@@ -47,13 +50,11 @@ function render() {
     if (on) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
-  current.view.after?.(viewEl, current.params);
 }
 
 function route() {
   const next = resolve();
   const changed = !current || current.hash !== next.hash;
-  if (current && current.view !== next.view) current.view.leave?.();
   current = next;
   if (changed) {
     current.view.enter?.(current.params);
@@ -95,24 +96,41 @@ document.addEventListener('change', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.querySelector('.sheet-layer')) current?.view.actions?.closeSheet?.({});
+  if (e.key === 'Enter' && current?.view === loginView && e.target.closest('.login')) run(loginView.actions.login);
+});
+
+// กลับมาเปิดแอพอีกครั้ง: ดึงข้อมูลล่าสุด (เผื่อแฟนบันทึกจากอีกเครื่อง)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && ready && store.isRemote && !document.querySelector('.sheet-layer')) store.reload().catch(() => {});
 });
 
 // ---------- เริ่มแอพ ----------
 store.setErrorHandler((e) => {
   console.error(e);
-  toast('บันทึกข้อมูลไม่สำเร็จ ลองอีกครั้ง');
+  toast(`บันทึกไม่สำเร็จ: ${e.message || 'ลองอีกครั้ง'}`);
 });
 setRenderer(render);
 store.subscribe(render);
+loginView.setOnSuccess(boot);
 
-(async () => {
+async function boot() {
   try {
     await store.init(buildSeed);
   } catch (e) {
+    if (e.code === 'AUTH_REQUIRED') {
+      current = { view: loginView, tab: null, params: {}, hash: '#login' };
+      render();
+      return;
+    }
     console.error(e);
-    viewEl.innerHTML = `<div class="empty"><h2>เปิดข้อมูลไม่ได้</h2><p class="muted">${esc(e.message)}</p></div>`;
+    tabbar.hidden = true;
+    viewEl.innerHTML = `<div class="empty"><h2>เปิดข้อมูลไม่ได้</h2><p class="muted">${esc(e.message)}</p><button type="button" class="btn" onclick="location.reload()">ลองใหม่</button></div>`;
     return;
   }
-  window.addEventListener('hashchange', route);
+  if (!ready) window.addEventListener('hashchange', route);
+  ready = true;
+  current = null;
   route();
-})();
+}
+
+boot();

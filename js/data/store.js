@@ -1,24 +1,12 @@
 // ชั้นข้อมูลกลาง: หน้าจอทุกหน้าอ่าน/เขียนข้อมูลผ่านไฟล์นี้เท่านั้น
-// อยากย้ายไป Supabase ให้เปลี่ยนแค่บรรทัด adapter ด้านล่าง (ดู README.md)
+// ถ้าตั้งค่า Supabase ไว้ใน js/config.js จะใช้ Supabase ไม่อย่างนั้นใช้ localStorage
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.js';
 import { createLocalAdapter } from './adapter-local.js';
-// import { createSupabaseAdapter } from './adapter-supabase.js';
 
-// ลำดับนี้สำคัญ: ตารางที่ถูกอ้างอิง (foreign key) ต้องมาก่อน
-export const TABLES = [
-  'profiles',
-  'exercises',
-  'plan_days',
-  'plan_items',
-  'targets',
-  'day_moves',
-  'sessions',
-  'set_logs',
-  'exercise_notes',
-];
+// ลำดับนี้สำคัญ: ตารางที่ถูกอ้างอิงต้องมาก่อน
+export const TABLES = ['profiles', 'exercises', 'plan_items', 'targets', 'sessions', 'results', 'exercise_notes'];
 
-const adapter = createLocalAdapter();
-// const adapter = createSupabaseAdapter({ url: 'https://xxxx.supabase.co', anonKey: 'eyJ...' });
-
+let adapter = null;
 const cache = Object.fromEntries(TABLES.map((t) => [t, []]));
 const listeners = new Set();
 let onError = (e) => console.error(e);
@@ -28,34 +16,71 @@ export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
+async function getAdapter() {
+  if (adapter) return adapter;
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    const { createSupabaseAdapter } = await import('./adapter-supabase.js');
+    adapter = createSupabaseAdapter({ url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY });
+  } else {
+    adapter = createLocalAdapter();
+  }
+  return adapter;
+}
+
 function emit() {
   listeners.forEach((fn) => fn());
 }
 
+async function loadAll() {
+  const next = {};
+  for (const t of TABLES) next[t] = (await adapter.select(t)) || [];
+  Object.assign(cache, next);
+}
+
+// ถ้าบันทึกไม่สำเร็จ ให้แจ้ง แล้วโหลดข้อมูลจริงกลับมา เพื่อไม่ให้หน้าจอกับข้อมูลไม่ตรงกัน
 async function guard(promise) {
   try {
     await promise;
   } catch (e) {
     onError(e);
+    try {
+      await loadAll();
+      emit();
+    } catch {}
   }
 }
 
-async function loadAll() {
-  for (const t of TABLES) cache[t] = (await adapter.select(t)) || [];
-}
-
 export const store = {
-  get adapterName() {
-    return adapter.name;
+  get isRemote() {
+    return adapter?.name === 'supabase';
+  },
+  get configured() {
+    return !!(SUPABASE_URL && SUPABASE_ANON_KEY);
   },
 
   async init(buildSeed) {
+    await getAdapter();
     await adapter.init?.();
     await loadAll();
     if (!cache.profiles.length) {
-      await adapter.replaceAll(buildSeed());
+      const seed = buildSeed();
+      await adapter.insert('profiles', seed.profiles);
       await loadAll();
     }
+  },
+
+  async signIn(email, password) {
+    await getAdapter();
+    await adapter.signIn(email, password);
+  },
+
+  async signOut() {
+    await adapter?.signOut?.();
+  },
+
+  async reload() {
+    await loadAll();
+    emit();
   },
 
   all(table) {
@@ -71,8 +96,8 @@ export const store = {
     onError = fn;
   },
 
-  // ทุกการเขียนอัปเดต cache ก่อน (หน้าจอตอบสนองทันที) แล้วค่อยบันทึกลง adapter
-  // opts.silent = ไม่ต้องวาดหน้าจอใหม่ (ใช้กับช่องพิมพ์ เพื่อไม่ให้เคอร์เซอร์หลุด)
+  // ทุกการเขียนอัปเดตหน้าจอทันที แล้วค่อยบันทึกจริง
+  // opts.silent = ไม่วาดหน้าจอใหม่ (ใช้กับช่องพิมพ์ ไม่ให้เคอร์เซอร์หลุด)
   async insert(table, row, opts = {}) {
     const r = { id: uid(), created_at: new Date().toISOString(), ...row };
     cache[table] = [...cache[table], r];
@@ -103,17 +128,12 @@ export const store = {
   },
 
   exportAll() {
-    return {
-      app: 'fitduo',
-      version: 1,
-      exported_at: new Date().toISOString(),
-      tables: structuredClone(cache),
-    };
+    return { app: 'fitwithyou', version: 2, exported_at: new Date().toISOString(), tables: structuredClone(cache) };
   },
 
   async importAll(data) {
-    if (!data || data.app !== 'fitduo' || typeof data.tables !== 'object') {
-      throw new Error('ไฟล์นี้ไม่ใช่ไฟล์สำรองของแอพนี้');
+    if (!data || data.app !== 'fitwithyou' || data.version !== 2 || typeof data.tables !== 'object') {
+      throw new Error('ไฟล์นี้ไม่ใช่ไฟล์สำรองของ FitWithYou เวอร์ชันนี้');
     }
     const tables = Object.fromEntries(TABLES.map((t) => [t, Array.isArray(data.tables[t]) ? data.tables[t] : []]));
     await adapter.replaceAll(tables);
@@ -121,8 +141,11 @@ export const store = {
     emit();
   },
 
+  // ล้างทุกอย่าง แต่เก็บชื่อและรูปของคุณสองคนไว้
   async reset(buildSeed) {
-    await adapter.replaceAll(buildSeed());
+    const seed = buildSeed();
+    if (cache.profiles.length) seed.profiles = structuredClone(cache.profiles);
+    await adapter.replaceAll(seed);
     await loadAll();
     emit();
   },
